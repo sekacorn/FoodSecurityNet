@@ -1,0 +1,134 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: auth-service
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:5432/foodsecuritynet
+    username: ${POSTGRES_USER:foodsec_user}
+    password: ${POSTGRES_PASSWORD:changeme}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    timeout: 60000ms
+
+  # OAuth2 Configuration
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:your-google-client-id}
+            client-secret: ${GOOGLE_CLIENT_SECRET:your-google-client-secret}
+            scope:
+              - email
+              - profile
+          microsoft:
+            client-id: ${MICROSOFT_CLIENT_ID:your-microsoft-client-id}
+            client-secret: ${MICROSOFT_CLIENT_SECRET:your-microsoft-client-secret}
+            scope:
+              - openid
+              - profile
+              - email
+          okta:
+            client-id: ${OKTA_CLIENT_ID:your-okta-client-id}
+            client-secret: ${OKTA_CLIENT_SECRET:your-okta-client-secret}
+            scope:
+              - openid
+              - profile
+              - email
+        provider:
+          microsoft:
+            authorization-uri: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+            token-uri: https://login.microsoftonline.com/common/oauth2/v2.0/token
+            user-info-uri: https://graph.microsoft.com/v1.0/me
+            user-name-attribute: displayName
+          okta:
+            authorization-uri: ${OKTA_DOMAIN}/oauth2/v1/authorize
+            token-uri: ${OKTA_DOMAIN}/oauth2/v1/token
+            user-info-uri: ${OKTA_DOMAIN}/oauth2/v1/userinfo
+            jwk-set-uri: ${OKTA_DOMAIN}/oauth2/v1/keys
+
+  # SAML Configuration for Enterprise SSO
+  saml:
+    entity-id: ${SAML_ENTITY_ID:foodsecuritynet}
+    idp:
+      metadata-url: ${SAML_IDP_METADATA_URL:}
+    keystore:
+      location: ${SAML_KEYSTORE_LOCATION:classpath:saml/keystore.jks}
+      password: ${SAML_KEYSTORE_PASSWORD:changeme}
+      alias: ${SAML_KEYSTORE_ALIAS:foodsecuritynet}
+
+  # Email Configuration for MFA
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-very-secure-jwt-secret-key-change-in-production}
+  expiration: 86400000 # 24 hours in milliseconds
+  refresh-expiration: 604800000 # 7 days in milliseconds
+
+# MFA Configuration
+mfa:
+  issuer: ${MFA_ISSUER:FoodSecurityNet}
+  enabled: ${MFA_ENABLED:true}
+  backup-codes-count: 10
+
+# Security
+security:
+  rate-limit:
+    enabled: true
+    max-requests: 100
+    window-seconds: 60
+  password:
+    min-length: 8
+    require-uppercase: true
+    require-lowercase: true
+    require-digit: true
+    require-special: true
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging
+logging:
+  level:
+    com.foodsec: INFO
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

@@ -1,0 +1,160 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agri-visualizer-config
+  namespace: foodsecuritynet
+data:
+  SPRING_PROFILES_ACTIVE: "production"
+  POSTGRES_HOST: "postgres"
+  REDIS_HOST: "redis"
+  AI_MODEL_URL: "http://ai-model:8000"
+  SERVER_PORT: "8083"
+  LOG_LEVEL: "INFO"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: agri-visualizer-secret
+  namespace: foodsecuritynet
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: changeme-in-production
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agri-visualizer
+  namespace: foodsecuritynet
+  labels:
+    app: agri-visualizer
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: agri-visualizer
+  template:
+    metadata:
+      labels:
+        app: agri-visualizer
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8083"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+      - name: agri-visualizer
+        image: foodsecuritynet/agri-visualizer:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8083
+          name: http
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: agri-visualizer-config
+        - secretRef:
+            name: agri-visualizer-secret
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8083
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8083
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - agri-visualizer
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agri-visualizer
+  namespace: foodsecuritynet
+  labels:
+    app: agri-visualizer
+    tier: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8083
+    targetPort: 8083
+    protocol: TCP
+    name: http
+  selector:
+    app: agri-visualizer
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: agri-visualizer-hpa
+  namespace: foodsecuritynet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agri-visualizer
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

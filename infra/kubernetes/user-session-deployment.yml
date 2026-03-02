@@ -1,0 +1,160 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-session-config
+  namespace: foodsecuritynet
+data:
+  SPRING_PROFILES_ACTIVE: "production"
+  POSTGRES_HOST: "postgres"
+  REDIS_HOST: "redis"
+  SERVER_PORT: "8084"
+  LOG_LEVEL: "INFO"
+  SESSION_TIMEOUT: "3600"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-session-secret
+  namespace: foodsecuritynet
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: changeme-in-production
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-session
+  namespace: foodsecuritynet
+  labels:
+    app: user-session
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: user-session
+  template:
+    metadata:
+      labels:
+        app: user-session
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8084"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+      - name: user-session
+        image: foodsecuritynet/user-session:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8084
+          name: http
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: user-session-config
+        - secretRef:
+            name: user-session-secret
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "768Mi"
+            cpu: "800m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8084
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8084
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - user-session
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-session
+  namespace: foodsecuritynet
+  labels:
+    app: user-session
+    tier: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8084
+    targetPort: 8084
+    protocol: TCP
+    name: http
+  selector:
+    app: user-session
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-session-hpa
+  namespace: foodsecuritynet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-session
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

@@ -1,0 +1,275 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: foodsec-postgres
+    environment:
+      POSTGRES_DB: foodsecuritynet
+      POSTGRES_USER: foodsec_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/postgres/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - foodsec-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U foodsec_user -d foodsecuritynet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: foodsec-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./database/redis/config.yaml:/usr/local/etc/redis/redis.conf
+    networks:
+      - foodsec-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: foodsec-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - foodsec-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./backend/auth-service
+      dockerfile: Dockerfile
+    container_name: foodsec-auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      OAUTH2_CLIENT_ID: ${OAUTH2_CLIENT_ID}
+      OAUTH2_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
+      SAML_ENTITY_ID: ${SAML_ENTITY_ID}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - foodsec-network
+
+  # Agri Integrator Service
+  agri-integrator:
+    build:
+      context: ./backend/agri-integrator
+      dockerfile: Dockerfile
+    container_name: foodsec-agri-integrator
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - foodsec-network
+    volumes:
+      - agri_data:/app/data
+
+  # Agri Visualizer Service
+  agri-visualizer:
+    build:
+      context: ./backend/agri-visualizer
+      dockerfile: Dockerfile
+    container_name: foodsec-agri-visualizer
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      AI_MODEL_URL: http://ai-model:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-model:
+        condition: service_started
+    networks:
+      - foodsec-network
+
+  # User Session Service
+  user-session:
+    build:
+      context: ./backend/user-session
+      dockerfile: Dockerfile
+    container_name: foodsec-user-session
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - foodsec-network
+
+  # LLM Service
+  llm-service:
+    build:
+      context: ./backend/llm-service
+      dockerfile: Dockerfile
+    container_name: foodsec-llm-service
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      LLM_PYTHON_URL: http://llm-python:8001
+    depends_on:
+      - llm-python
+    networks:
+      - foodsec-network
+
+  # LLM Python Service
+  llm-python:
+    build:
+      context: ./ai-model/llm-service
+      dockerfile: Dockerfile
+    container_name: foodsec-llm-python
+    ports:
+      - "8001:8001"
+    environment:
+      HF_API_KEY: ${HF_API_KEY}
+      XAI_API_KEY: ${XAI_API_KEY}
+      MODEL_NAME: ${LLM_MODEL_NAME:-gpt2}
+    networks:
+      - foodsec-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Collaboration Service
+  collaboration-service:
+    build:
+      context: ./backend/collaboration-service
+      dockerfile: Dockerfile
+    container_name: foodsec-collaboration-service
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      REDIS_HOST: redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - foodsec-network
+
+  # AI Model Service
+  ai-model:
+    build:
+      context: ./ai-model
+      dockerfile: Dockerfile
+    container_name: foodsec-ai-model
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_PATH: /app/model.pt
+      WORKERS: ${AI_WORKERS:-4}
+    networks:
+      - foodsec-network
+    volumes:
+      - model_data:/app/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: foodsec-frontend
+    ports:
+      - "3000:80"
+    environment:
+      REACT_APP_API_URL: http://localhost:8080
+      REACT_APP_WS_URL: ws://localhost:8086
+    depends_on:
+      - api-gateway
+    networks:
+      - foodsec-network
+
+  # NGINX Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: foodsec-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./infra/nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - api-gateway
+      - frontend
+    networks:
+      - foodsec-network
+
+networks:
+  foodsec-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  agri_data:
+  model_data:

@@ -1,0 +1,27 @@
+# Docker-specific configuration
+# This profile is activated when running in Docker containers
+
+spring:
+  data:
+    redis:
+      host: redis
+      port: 6379
+
+services:
+  auth-service:
+    url: http://auth-service:8081
+  agri-integrator:
+    url: http://agri-integrator:8082
+  agri-visualizer:
+    url: http://agri-visualizer:8083
+  user-session:
+    url: http://user-session:8084
+  llm-service:
+    url: http://llm-service:8085
+  collaboration-service:
+    url: http://collaboration-service:8086
+
+logging:
+  level:
+    root: INFO
+    com.foodsec.gateway: INFO

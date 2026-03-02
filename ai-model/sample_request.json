@@ -1,0 +1,27 @@
+{
+  "agricultural": {
+    "farm_size": 10.5,
+    "soil_ph": 6.5,
+    "soil_nitrogen": 45.0,
+    "soil_phosphorus": 30.0,
+    "soil_potassium": 25.0,
+    "irrigation_frequency": 3,
+    "soil_type": "loam",
+    "current_crop": "maize"
+  },
+  "environmental": {
+    "rainfall": 800.0,
+    "temperature": 25.0,
+    "humidity": 60.0,
+    "elevation": 1200.0,
+    "region": "east"
+  },
+  "socioeconomic": {
+    "income": 50000.0,
+    "distance_to_market": 15.0,
+    "education_level": 3,
+    "access_to_credit": true,
+    "extension_services": true,
+    "mbti_type": "INTJ"
+  }
+}

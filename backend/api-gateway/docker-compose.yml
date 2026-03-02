@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Redis for rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: foodsec-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - foodsec-network
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: foodsec-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-foodsecuritynet-secret-key-change-in-production-at-least-256-bits-long}
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - AGRI_INTEGRATOR_URL=http://agri-integrator:8082
+      - AGRI_VISUALIZER_URL=http://agri-visualizer:8083
+      - USER_SESSION_URL=http://user-session:8084
+      - LLM_SERVICE_URL=http://llm-service:8085
+      - COLLABORATION_SERVICE_URL=http://collaboration-service:8086
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+      - JAVA_OPTS=-Xms512m -Xmx1024m
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - foodsec-network
+    restart: unless-stopped
+
+networks:
+  foodsec-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
