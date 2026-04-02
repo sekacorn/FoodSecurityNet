@@ -27,7 +27,7 @@ spring:
           min-idle: 0
 
 server:
-  port: 8085
+  port: 8086
   servlet:
     context-path: /collaboration
 

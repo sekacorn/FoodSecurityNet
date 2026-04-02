@@ -11,6 +11,7 @@ const ResourceMonitor = ({ refreshInterval = 5000 }) => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     const fetchResources = async () => {
@@ -18,9 +19,19 @@ const ResourceMonitor = ({ refreshInterval = 5000 }) => {
         const response = await api.get('/system/resources');
         setResources(response.data);
         setError(null);
+        setNotice(null);
       } catch (err) {
-        console.error('Failed to fetch resources:', err);
-        setError('Failed to fetch system resources');
+        const memory = performance?.memory;
+        setResources({
+          cpu: 0,
+          memory: memory?.jsHeapSizeLimit
+            ? (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100
+            : 0,
+          gpu: 0,
+          disk: 0,
+        });
+        setError(null);
+        setNotice('Live backend resource metrics unavailable. Showing browser-only memory usage.');
       } finally {
         setLoading(false);
       }
@@ -44,13 +55,10 @@ const ResourceMonitor = ({ refreshInterval = 5000 }) => {
     return 'bg-green-600';
   };
 
-  const ResourceBar = ({ label, value, icon }) => (
+  const ResourceBar = ({ label, value }) => (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <span className="text-2xl">{icon}</span>
-          <span className="font-medium text-gray-700">{label}</span>
-        </div>
+        <span className="font-medium text-gray-700">{label}</span>
         <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(value)}`}>
           {value.toFixed(1)}%
         </span>
@@ -60,9 +68,11 @@ const ResourceMonitor = ({ refreshInterval = 5000 }) => {
           className={`h-full transition-all duration-500 ${getProgressColor(value)}`}
           style={{ width: `${value}%` }}
           role="progressbar"
+          aria-label={`${label} usage`}
           aria-valuenow={value}
           aria-valuemin="0"
           aria-valuemax="100"
+          aria-valuetext={`${label} usage ${value.toFixed(1)} percent`}
         ></div>
       </div>
     </div>
@@ -115,10 +125,15 @@ const ResourceMonitor = ({ refreshInterval = 5000 }) => {
       </div>
 
       <div className="space-y-6">
-        <ResourceBar label="CPU" value={resources.cpu} icon="💻" />
-        <ResourceBar label="Memory" value={resources.memory} icon="🧠" />
-        <ResourceBar label="GPU" value={resources.gpu} icon="🎮" />
-        <ResourceBar label="Disk" value={resources.disk} icon="💾" />
+        {notice && (
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800" role="status" aria-live="polite">
+            {notice}
+          </div>
+        )}
+        <ResourceBar label="CPU" value={resources.cpu} />
+        <ResourceBar label="Memory" value={resources.memory} />
+        <ResourceBar label="GPU" value={resources.gpu} />
+        <ResourceBar label="Disk" value={resources.disk} />
       </div>
 
       <div className="mt-6 pt-6 border-t border-gray-200">

@@ -119,6 +119,24 @@ public class AuthController {
     }
 
     /**
+     * Updates the current user's profile.
+     *
+     * @param request updated profile fields
+     * @param authorizationHeader Authorization header with JWT token
+     * @return updated user information
+     */
+    @PutMapping("/me")
+    public ResponseEntity<ApiResponse<UserDto>> updateCurrentUser(
+        @Valid @RequestBody UpdateProfileRequest request,
+        @RequestHeader("Authorization") String authorizationHeader
+    ) {
+        String token = jwtService.extractTokenFromHeader(authorizationHeader);
+        UserDto user = authService.updateCurrentUser(token, request);
+
+        return ResponseEntity.ok(ApiResponse.success(user, "User updated successfully"));
+    }
+
+    /**
      * Health check endpoint
      *
      * @return health status
@@ -143,7 +161,6 @@ public class AuthController {
             .email(user.getEmail())
             .fullName(user.getFullName())
             .role(user.getRole())
-            .mbtiType(user.getMbtiType())
             .ssoProvider(user.getSsoProvider())
             .mfaEnabled(user.getMfaEnabled())
             .emailVerified(user.getEmailVerified())

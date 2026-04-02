@@ -21,7 +21,6 @@
     "distance_to_market": 15.0,
     "education_level": 3,
     "access_to_credit": true,
-    "extension_services": true,
-    "mbti_type": "INTJ"
+    "extension_services": true
   }
 }

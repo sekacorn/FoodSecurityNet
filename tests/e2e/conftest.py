@@ -65,8 +65,7 @@ def test_user_data():
         "username": f"testuser_{int(time.time())}",
         "email": f"test_{int(time.time())}@example.com",
         "password": "SecureP@ssw0rd123",
-        "fullName": "Test User",
-        "mbtiType": "INTJ"
+        "fullName": "Test User"
     }
 
 
@@ -196,8 +195,7 @@ def sample_ai_prediction_request():
             "income_level": "low",
             "market_access_score": 3.5,
             "education_level": "secondary"
-        },
-        "mbti_type": "INTJ"
+        }
     }
 
 
@@ -210,6 +208,5 @@ def sample_llm_query():
             "region": "Kenya",
             "season": "spring",
             "soil_type": "clay_loam"
-        },
-        "mbti_type": "INTJ"
+        }
     }

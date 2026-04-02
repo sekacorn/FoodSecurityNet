@@ -16,13 +16,25 @@ const Analyze = ({ user }) => {
     setAnalyzing(true);
 
     try {
-      const response = await api.post('/analyze', {
+      const response = await api.post('/llm/analyze', {
+        analysisType: file.name.endsWith('.csv') ? 'csv' : 'json',
         data: content,
-        user_id: user.id,
-        mbti: user.mbti || 'ISTJ',
+        userId: user.id,
       });
 
-      setRecommendations(response.data.recommendations || []);
+      const insights = response.data?.analysis?.insights;
+      setRecommendations(
+        insights
+          ? [
+              {
+                title: 'AI Analysis Summary',
+                category: 'Data Analysis',
+                description: insights,
+                priority: 'medium',
+              },
+            ]
+          : []
+      );
       toast.success('Analysis completed successfully!');
     } catch (error) {
       console.error('Analysis error:', error);
@@ -56,19 +68,6 @@ const Analyze = ({ user }) => {
                 maxSize={10485760}
               />
             </div>
-
-            {/* User MBTI Info */}
-            {user.mbti && (
-              <div className="bg-primary-50 border border-primary-200 rounded-lg p-6">
-                <h3 className="font-semibold text-primary-900 mb-2">Personalization</h3>
-                <p className="text-sm text-primary-700 mb-3">
-                  Recommendations are tailored for your personality type:
-                </p>
-                <div className="inline-flex items-center px-3 py-2 bg-primary-600 text-white rounded-lg font-semibold">
-                  {user.mbti}
-                </div>
-              </div>
-            )}
 
             {/* Export Tool */}
             {recommendations && (
@@ -120,7 +119,7 @@ const Analyze = ({ user }) => {
                   </p>
                 </div>
 
-                <AgriDetails recommendations={recommendations} userMBTI={user.mbti || 'ISTJ'} />
+                <AgriDetails recommendations={recommendations} />
               </div>
             ) : (
               <div className="bg-white rounded-lg shadow p-12">

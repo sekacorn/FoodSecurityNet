@@ -26,8 +26,6 @@ public class QueryRequest {
 
     private String queryType;
 
-    private String mbtiType;
-
     private Map<String, Object> context;
 
     private String visualizationId;

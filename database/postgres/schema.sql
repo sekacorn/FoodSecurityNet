@@ -11,7 +11,6 @@ CREATE TABLE users (
     password_hash VARCHAR(255), -- Nullable for SSO users
     full_name VARCHAR(255),
     role VARCHAR(50) NOT NULL DEFAULT 'USER', -- USER, MODERATOR, ADMIN, ENTERPRISE
-    mbti_type VARCHAR(4), -- 16 MBTI types
     sso_provider VARCHAR(50), -- GOOGLE, MICROSOFT, OKTA, SAML, null for local
     sso_subject VARCHAR(255), -- SSO provider's user ID
     mfa_enabled BOOLEAN DEFAULT FALSE,
@@ -116,7 +115,6 @@ CREATE TABLE farming_recommendations (
     recommendation_type VARCHAR(50), -- CROP_SELECTION, IRRIGATION, FERTILIZATION, PEST_CONTROL
     recommendation_text TEXT NOT NULL,
     confidence_score DECIMAL(5, 2),
-    mbti_tailored VARCHAR(4), -- MBTI type this recommendation is tailored for
     ai_model_version VARCHAR(50),
     metadata JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -181,7 +179,6 @@ CREATE TABLE llm_queries (
     query_text TEXT NOT NULL,
     response_text TEXT,
     context JSONB,
-    mbti_type VARCHAR(4),
     query_type VARCHAR(50), -- FARMING_ADVICE, TROUBLESHOOTING, VISUALIZATION, GENERAL
     response_time_ms INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

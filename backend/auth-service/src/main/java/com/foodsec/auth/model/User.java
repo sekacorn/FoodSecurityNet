@@ -23,7 +23,6 @@ import java.util.UUID;
  * - Role-based access control
  * - Multi-factor authentication settings
  * - Single Sign-On integration details
- * - MBTI personality type for personalized features
  * - Account status and verification
  */
 @Entity
@@ -66,10 +65,6 @@ public class User {
     @Column(name = "role", nullable = false, length = 20)
     @Builder.Default
     private Role role = Role.USER;
-
-    @Size(max = 4, message = "MBTI type must be 4 characters")
-    @Column(name = "mbti_type", length = 4)
-    private String mbtiType;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "sso_provider", length = 20)

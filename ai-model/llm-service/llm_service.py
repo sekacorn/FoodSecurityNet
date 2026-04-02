@@ -10,8 +10,7 @@ import uvicorn
 
 from model_manager import ModelManager
 from query_processor import QueryProcessor
-from mbti_personalizer import MBTIPersonalizer
-from config import SERVICE_HOST, SERVICE_PORT, LOG_LEVEL, MBTI_TYPES
+from config import SERVICE_HOST, SERVICE_PORT, LOG_LEVEL
 
 # Configure logging
 logging.basicConfig(
@@ -39,14 +38,12 @@ app.add_middleware(
 # Initialize components
 model_manager = ModelManager()
 query_processor = QueryProcessor()
-mbti_personalizer = MBTIPersonalizer()
 
 
 # Pydantic models
 class QueryRequest(BaseModel):
     query: str = Field(..., description="Natural language query")
     user_id: Optional[str] = Field(None, description="User identifier")
-    mbti_type: Optional[str] = Field(None, description="MBTI personality type")
     context: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional context")
     model: Optional[str] = Field(None, description="Specific model to use")
 
@@ -55,7 +52,6 @@ class QueryRequest(BaseModel):
             "example": {
                 "query": "What's the best time to plant maize in Kenya?",
                 "user_id": "user123",
-                "mbti_type": "ENTJ",
                 "context": {
                     "location": "Nairobi, Kenya",
                     "farm_size": "2 hectares"
@@ -69,7 +65,6 @@ class TroubleshootRequest(BaseModel):
     crop_type: Optional[str] = Field(None, description="Type of crop")
     symptoms: Optional[List[str]] = Field(default_factory=list, description="Observed symptoms")
     user_id: Optional[str] = Field(None, description="User identifier")
-    mbti_type: Optional[str] = Field(None, description="MBTI personality type")
     context: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional context")
 
     class Config:
@@ -78,7 +73,6 @@ class TroubleshootRequest(BaseModel):
                 "problem": "My tomato plants have yellow leaves and are wilting",
                 "crop_type": "tomato",
                 "symptoms": ["yellow leaves", "wilting"],
-                "mbti_type": "INFJ",
                 "context": {
                     "location": "Mombasa, Kenya"
                 }
@@ -92,7 +86,6 @@ class QueryResponse(BaseModel):
     query_type: str
     entities: Dict[str, List[str]]
     metadata: Dict[str, Any]
-    mbti_tailored: bool = False
 
 
 class HealthResponse(BaseModel):
@@ -117,17 +110,10 @@ async def health_check():
 @app.post("/api/query", response_model=QueryResponse, tags=["Query"])
 async def process_query(request: QueryRequest):
     """
-    Process a natural language query with optional MBTI personalization
+    Process a natural language query
     """
     try:
         logger.info(f"Processing query: {request.query}")
-
-        # Validate MBTI type if provided
-        if request.mbti_type and request.mbti_type.upper() not in MBTI_TYPES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid MBTI type. Must be one of: {', '.join(MBTI_TYPES)}"
-            )
 
         # Process query to extract intent and context
         query_context = query_processor.process_query(
@@ -141,39 +127,21 @@ async def process_query(request: QueryRequest):
             query_context
         )
 
-        # Add MBTI personalization to prompt if provided
-        if request.mbti_type:
-            mbti_style = mbti_personalizer.get_query_style_prompt(request.mbti_type)
-            enhanced_prompt = f"{enhanced_prompt}\n\n{mbti_style}"
-
         # Generate response using model manager
         raw_response = model_manager.generate_response(
             enhanced_prompt,
             model_name=request.model
         )
 
-        # Tailor response based on MBTI if provided
-        if request.mbti_type:
-            tailored_response = mbti_personalizer.tailor_response(
-                raw_response,
-                request.mbti_type,
-                query_context
-            )
-            mbti_tailored = True
-        else:
-            tailored_response = raw_response
-            mbti_tailored = False
-
         # Format response
-        formatted = query_processor.format_response(tailored_response, query_context)
+        formatted = query_processor.format_response(raw_response, query_context)
 
         return QueryResponse(
             response=formatted['response'],
             intent=formatted['intent'],
             query_type=formatted['query_type'],
             entities=formatted['entities'],
-            metadata=formatted['metadata'],
-            mbti_tailored=mbti_tailored
+            metadata=formatted['metadata']
         )
 
     except HTTPException:
@@ -193,13 +161,6 @@ async def troubleshoot_problem(request: TroubleshootRequest):
     """
     try:
         logger.info(f"Troubleshooting problem: {request.problem}")
-
-        # Validate MBTI type if provided
-        if request.mbti_type and request.mbti_type.upper() not in MBTI_TYPES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid MBTI type. Must be one of: {', '.join(MBTI_TYPES)}"
-            )
 
         # Build troubleshooting query
         query_parts = [request.problem]
@@ -241,30 +202,13 @@ Problem: {request.problem}
         if request.context:
             diagnostic_prompt += f"\nContext: {request.context}"
 
-        # Add MBTI personalization if provided
-        if request.mbti_type:
-            mbti_style = mbti_personalizer.get_query_style_prompt(request.mbti_type)
-            diagnostic_prompt = f"{diagnostic_prompt}\n\n{mbti_style}"
-
         diagnostic_prompt += "\n\nProvide your diagnostic analysis:"
 
         # Generate diagnostic response
         raw_response = model_manager.generate_response(diagnostic_prompt)
 
-        # Tailor response based on MBTI if provided
-        if request.mbti_type:
-            tailored_response = mbti_personalizer.tailor_response(
-                raw_response,
-                request.mbti_type,
-                query_context
-            )
-            mbti_tailored = True
-        else:
-            tailored_response = raw_response
-            mbti_tailored = False
-
         # Format response
-        formatted = query_processor.format_response(tailored_response, query_context)
+        formatted = query_processor.format_response(raw_response, query_context)
 
         return QueryResponse(
             response=formatted['response'],
@@ -275,8 +219,7 @@ Problem: {request.problem}
                 'type': 'diagnostic',
                 'crop_type': request.crop_type,
                 'symptoms': request.symptoms
-            },
-            mbti_tailored=mbti_tailored
+            }
         )
 
     except HTTPException:
@@ -287,38 +230,6 @@ Problem: {request.problem}
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error in troubleshooting: {str(e)}"
         )
-
-
-@app.get("/api/mbti-types", tags=["MBTI"])
-async def get_mbti_types():
-    """
-    Get all supported MBTI personality types
-    """
-    return {
-        "mbti_types": MBTI_TYPES,
-        "count": len(MBTI_TYPES)
-    }
-
-
-@app.get("/api/mbti-profile/{mbti_type}", tags=["MBTI"])
-async def get_mbti_profile(mbti_type: str):
-    """
-    Get the profile for a specific MBTI type
-    """
-    mbti_type = mbti_type.upper()
-
-    if mbti_type not in MBTI_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"MBTI type not found. Valid types: {', '.join(MBTI_TYPES)}"
-        )
-
-    profile = mbti_personalizer.get_mbti_profile(mbti_type)
-
-    return {
-        "mbti_type": mbti_type,
-        "profile": profile
-    }
 
 
 @app.get("/api/models", tags=["Models"])

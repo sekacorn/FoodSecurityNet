@@ -132,4 +132,12 @@ public class CollaborationSessionService {
     public List<CollabSession> getActiveSessionsByCreator(String creatorId) {
         return collabSessionRepository.findByCreatorIdAndStatus(creatorId, "ACTIVE");
     }
+
+    public List<CollabSession> getActiveSessions(String creatorId) {
+        if (creatorId != null && !creatorId.isBlank()) {
+            return getActiveSessionsByCreator(creatorId);
+        }
+
+        return collabSessionRepository.findByStatus("ACTIVE");
+    }
 }

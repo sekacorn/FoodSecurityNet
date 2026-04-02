@@ -1,43 +1,88 @@
 import api from './api';
 
+const normalizeUser = (user) => {
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    username: user.username,
+    name: user.fullName || user.username || 'User',
+    email: user.email,
+    role: user.role,
+    mfa_enabled: Boolean(user.mfaEnabled),
+    email_verified: Boolean(user.emailVerified),
+    is_active: Boolean(user.isActive),
+    last_login: user.lastLogin,
+    created_at: user.createdAt,
+    updated_at: user.updatedAt,
+  };
+};
+
+const normalizeLoginResponse = (payload) => {
+  if (!payload) return null;
+
+  return {
+    access_token: payload.accessToken,
+    refresh_token: payload.refreshToken,
+    expires_in: payload.expiresIn,
+    requires_mfa: Boolean(payload.mfaRequired),
+    user: payload.mfaRequired
+      ? null
+      : normalizeUser({
+          id: payload.userId,
+          username: payload.username,
+          email: payload.email,
+          fullName: payload.fullName,
+          role: payload.role,
+          mfaEnabled: payload.mfaEnabled,
+          emailVerified: payload.emailVerified,
+          isActive: true,
+        }),
+  };
+};
+
+const createUsername = (name, email) => {
+  const preferred = (name || email.split('@')[0] || 'user')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
+
+  return preferred.slice(0, 50) || `user${Date.now()}`;
+};
+
 class AuthService {
-  // Login
   async login(credentials) {
-    try {
-      const response = await api.post('/auth/login', credentials);
+    const response = await api.post('/auth/login', {
+      usernameOrEmail: credentials.email,
+      password: credentials.password,
+      mfaCode: credentials.mfa_code || undefined,
+    });
 
-      if (response.data.access_token) {
-        localStorage.setItem('access_token', response.data.access_token);
-        if (response.data.refresh_token) {
-          localStorage.setItem('refresh_token', response.data.refresh_token);
-        }
+    const normalized = normalizeLoginResponse(response.data);
+
+    if (normalized?.access_token) {
+      localStorage.setItem('access_token', normalized.access_token);
+      if (normalized.refresh_token) {
+        localStorage.setItem('refresh_token', normalized.refresh_token);
       }
-
-      return response.data;
-    } catch (error) {
-      throw error;
     }
+
+    return normalized;
   }
 
-  // Register
   async register(userData) {
-    try {
-      const response = await api.post('/auth/register', userData);
+    const response = await api.post('/auth/register', {
+      username: createUsername(userData.name, userData.email),
+      email: userData.email,
+      password: userData.password,
+      fullName: userData.name,
+      role: 'USER',
+    });
 
-      if (response.data.access_token) {
-        localStorage.setItem('access_token', response.data.access_token);
-        if (response.data.refresh_token) {
-          localStorage.setItem('refresh_token', response.data.refresh_token);
-        }
-      }
-
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    return {
+      user: normalizeUser(response.data?.data),
+    };
   }
 
-  // Logout
   async logout() {
     try {
       await api.post('/auth/logout');
@@ -49,19 +94,16 @@ class AuthService {
     }
   }
 
-  // Get current user
   async getCurrentUser() {
-    try {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        return null;
-      }
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      return null;
+    }
 
+    try {
       const response = await api.get('/auth/me');
-      return response.data.user || response.data;
+      return normalizeUser(response.data?.data);
     } catch (error) {
-      console.error('Get current user error:', error);
-      // If unauthorized, clear tokens
       if (error.response?.status === 401) {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -70,130 +112,60 @@ class AuthService {
     }
   }
 
-  // Refresh token
+  async updateCurrentUser(profile) {
+    const response = await api.put('/auth/me', {
+      fullName: profile.name,
+      email: profile.email,
+    });
+
+    return normalizeUser(response.data?.data);
+  }
+
   async refreshToken() {
-    try {
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) {
-        throw new Error('No refresh token available');
-      }
-
-      const response = await api.post('/auth/refresh', {
-        refresh_token: refreshToken,
-      });
-
-      if (response.data.access_token) {
-        localStorage.setItem('access_token', response.data.access_token);
-      }
-
-      return response.data;
-    } catch (error) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      throw error;
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
     }
+
+    const response = await api.post('/auth/refresh', { refreshToken });
+    const normalized = normalizeLoginResponse(response.data);
+
+    if (normalized?.access_token) {
+      localStorage.setItem('access_token', normalized.access_token);
+    }
+
+    return normalized;
   }
 
-  // SSO Login
   async ssoLogin(provider) {
-    try {
-      // Redirect to SSO provider
-      window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/sso/${provider}`;
-    } catch (error) {
-      console.error('SSO login error:', error);
-      throw error;
-    }
+    window.location.href = `${import.meta.env.VITE_API_URL}/oauth2/authorization/${provider}`;
   }
 
-  // Handle SSO callback
-  async handleSSOCallback(code, provider) {
-    try {
-      const response = await api.post('/auth/sso/callback', {
-        code,
-        provider,
-      });
-
-      if (response.data.access_token) {
-        localStorage.setItem('access_token', response.data.access_token);
-        if (response.data.refresh_token) {
-          localStorage.setItem('refresh_token', response.data.refresh_token);
-        }
-      }
-
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // MFA methods
   async setupMFA() {
-    try {
-      const response = await api.post('/auth/mfa/setup');
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    const response = await api.post('/auth/mfa/setup');
+    return response.data?.data;
   }
 
   async verifyMFA(code, secret) {
-    try {
-      const response = await api.post('/auth/mfa/verify', {
-        code,
-        secret,
-      });
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    const response = await api.post('/auth/mfa/verify', { code, secret });
+    return response.data?.data;
   }
 
-  async disableMFA() {
-    try {
-      const response = await api.post('/auth/mfa/disable');
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+  async disableMFA(code) {
+    const response = await api.post('/auth/mfa/disable', { code });
+    return response.data?.data;
   }
 
-  // Password reset
-  async requestPasswordReset(email) {
-    try {
-      const response = await api.post('/auth/password-reset/request', {
-        email,
-      });
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  async resetPassword(token, newPassword) {
-    try {
-      const response = await api.post('/auth/password-reset/confirm', {
-        token,
-        password: newPassword,
-      });
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // Check authentication status
   isAuthenticated() {
     return !!localStorage.getItem('access_token');
   }
 
-  // Get token
   getToken() {
     return localStorage.getItem('access_token');
   }
 }
 
-// Create singleton instance
 const authService = new AuthService();
 
-export { authService };
+export { authService, normalizeUser };
 export default authService;

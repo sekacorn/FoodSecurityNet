@@ -69,7 +69,6 @@ public class AuthService {
             .email(request.getEmail())
             .passwordHash(passwordEncoder.encode(request.getPassword()))
             .fullName(request.getFullName())
-            .mbtiType(request.getMbtiType())
             .role(request.getRole() != null ? Role.valueOf(request.getRole()) : Role.USER)
             .ssoProvider(SsoProvider.LOCAL)
             .mfaEnabled(false)
@@ -182,7 +181,6 @@ public class AuthService {
             .email(user.getEmail())
             .fullName(user.getFullName())
             .role(user.getRole())
-            .mbtiType(user.getMbtiType())
             .mfaEnabled(user.getMfaEnabled())
             .mfaRequired(false)
             .emailVerified(user.getEmailVerified())
@@ -270,7 +268,6 @@ public class AuthService {
             .email(user.getEmail())
             .fullName(user.getFullName())
             .role(user.getRole())
-            .mbtiType(user.getMbtiType())
             .mfaEnabled(user.getMfaEnabled())
             .emailVerified(user.getEmailVerified())
             .build();
@@ -289,6 +286,31 @@ public class AuthService {
             .orElseThrow(AuthException::invalidToken);
 
         return convertToDto(user);
+    }
+
+    /**
+     * Updates the current user's profile information.
+     *
+     * @param token the access token
+     * @param request updated profile fields
+     * @return updated user DTO
+     */
+    @Transactional
+    public UserDto updateCurrentUser(String token, UpdateProfileRequest request) {
+        UUID userId = jwtService.getUserIdFromToken(token);
+        User user = userRepository.findById(userId)
+            .orElseThrow(AuthException::invalidToken);
+
+        String normalizedEmail = request.getEmail().trim().toLowerCase();
+        if (userRepository.existsByEmailAndIdNot(normalizedEmail, userId)) {
+            throw AuthException.emailExists();
+        }
+
+        user.setFullName(request.getFullName().trim());
+        user.setEmail(normalizedEmail);
+
+        User updatedUser = userRepository.save(user);
+        return convertToDto(updatedUser);
     }
 
     /**
@@ -345,7 +367,6 @@ public class AuthService {
             .email(user.getEmail())
             .fullName(user.getFullName())
             .role(user.getRole())
-            .mbtiType(user.getMbtiType())
             .ssoProvider(user.getSsoProvider())
             .mfaEnabled(user.getMfaEnabled())
             .emailVerified(user.getEmailVerified())

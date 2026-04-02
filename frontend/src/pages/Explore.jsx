@@ -18,8 +18,20 @@ const Explore = ({ user }) => {
   const loadVisualizationData = async () => {
     setLoading(true);
     try {
-      const response = await api.get(`/visualizations/${selectedDataset}`);
-      setViewData(response.data.data || generateSampleData());
+      if (selectedDataset === 'sample' || selectedDataset === 'demo') {
+        setViewData(generateSampleData());
+      } else {
+        const listResponse = await api.get('/visualizations/list');
+        const visualizations = listResponse.data?.data || [];
+        const selectedVisualization = visualizations[0];
+
+        if (!selectedVisualization?.id) {
+          throw new Error('No saved visualizations available');
+        }
+
+        const response = await api.get(`/visualizations/${selectedVisualization.id}`);
+        setViewData(response.data?.data?.data || response.data?.data || generateSampleData());
+      }
     } catch (error) {
       console.error('Failed to load visualization data:', error);
       toast.warning('Using sample data for visualization');

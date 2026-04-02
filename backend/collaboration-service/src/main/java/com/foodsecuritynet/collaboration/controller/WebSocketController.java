@@ -160,6 +160,19 @@ public class WebSocketController {
             ));
         }
 
+        @GetMapping("/sessions")
+        public ResponseEntity<Map<String, Object>> listSessions(
+                @RequestParam(required = false) String creatorId
+        ) {
+            var sessions = collaborationSessionService.getActiveSessions(creatorId);
+
+            return ResponseEntity.ok(Map.of(
+                    "status", "success",
+                    "sessions", sessions,
+                    "count", sessions.size()
+            ));
+        }
+
         @GetMapping("/sessions/{sessionId}")
         public ResponseEntity<Map<String, Object>> getSession(@PathVariable String sessionId) {
             var session = collaborationSessionService.getSession(sessionId);

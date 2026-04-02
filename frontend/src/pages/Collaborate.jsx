@@ -4,6 +4,14 @@ import { toast } from 'react-toastify';
 import CollabPanel from '../components/CollabPanel';
 import api from '../services/api';
 
+const normalizeSession = (session) => ({
+  id: session.sessionId,
+  name: session.sessionName,
+  creatorId: session.creatorId,
+  status: session.status,
+  createdAt: session.createdAt,
+});
+
 const Collaborate = ({ user }) => {
   const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
@@ -13,13 +21,15 @@ const Collaborate = ({ user }) => {
 
   useEffect(() => {
     loadSessions();
-  }, []);
+  }, [user.id]);
 
   const loadSessions = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/collaboration/sessions');
-      setSessions(response.data.sessions || []);
+      const response = await api.get('/collaboration/sessions', {
+        params: { creatorId: user.id },
+      });
+      setSessions((response.data.sessions || []).map(normalizeSession));
     } catch (error) {
       console.error('Failed to load sessions:', error);
       toast.error('Failed to load collaboration sessions');
@@ -33,12 +43,12 @@ const Collaborate = ({ user }) => {
     if (!newSessionName.trim()) return;
 
     try {
-      const response = await api.post('/collaboration/sessions', {
-        name: newSessionName,
-        created_by: user.id,
+      const response = await api.post('/collaboration/sessions/create', {
+        sessionName: newSessionName,
+        creatorId: user.id,
       });
 
-      const newSession = response.data.session;
+      const newSession = normalizeSession(response.data.session);
       setSessions([...sessions, newSession]);
       setCurrentSession(newSession);
       setShowCreateModal(false);
@@ -126,7 +136,7 @@ const Collaborate = ({ user }) => {
                       {session.name}
                     </h3>
                     <p className="text-sm text-gray-600">
-                      Created by {session.created_by_name || 'Unknown'}
+                      Created by {session.creatorId || 'Unknown'}
                     </p>
                   </div>
                   <div className="flex items-center space-x-1">
@@ -150,7 +160,7 @@ const Collaborate = ({ user }) => {
                         d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
                       />
                     </svg>
-                    <span>{session.participant_count || 0} participants</span>
+                    <span>Live session</span>
                   </div>
                 </div>
 

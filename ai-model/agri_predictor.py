@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any
 import torch
 import numpy as np
 import pandas as pd
@@ -54,13 +54,6 @@ class SocioeconomicData(BaseModel):
     education_level: int = Field(..., ge=0, le=4, description="Education level (0-4)")
     access_to_credit: bool = Field(..., description="Access to agricultural credit")
     extension_services: bool = Field(..., description="Access to extension services")
-    mbti_type: Optional[str] = Field(None, description="MBTI personality type")
-
-    @validator('mbti_type')
-    def validate_mbti(cls, v):
-        if v and v not in config.MBTI_TYPES:
-            raise ValueError(f"Invalid MBTI type. Must be one of {config.MBTI_TYPES}")
-        return v
 
 
 class PredictionRequest(BaseModel):
@@ -84,7 +77,6 @@ class PredictionResponse(BaseModel):
     fertilization_recommendations: List[Recommendation]
     overall_strategy: str
     confidence_score: float
-    mbti_tailored: bool
     timestamp: str
 
 
@@ -227,32 +219,6 @@ class ModelService:
 
         return pd.DataFrame([data])
 
-    def apply_mbti_modifiers(
-        self,
-        predictions: np.ndarray,
-        mbti_type: Optional[str]
-    ) -> np.ndarray:
-        """Apply MBTI-based modifications to predictions"""
-        if not mbti_type or mbti_type not in config.MBTI_PREFERENCES:
-            return predictions
-
-        modifiers = config.MBTI_PREFERENCES[mbti_type]
-        modified_predictions = predictions.copy()
-
-        # Apply weights based on MBTI preferences
-        # This is a simplified example - in practice, you'd map specific
-        # prediction indices to innovation, efficiency, etc.
-        innovation_weight = modifiers.get('innovation_weight', 1.0)
-        efficiency_weight = modifiers.get('efficiency_focus', 1.0)
-
-        # Apply weighted adjustments (example logic)
-        modified_predictions = modified_predictions * np.random.uniform(0.9, 1.1, predictions.shape)
-
-        # Renormalize
-        modified_predictions = modified_predictions / modified_predictions.sum()
-
-        return modified_predictions
-
     def predict(self, request: PredictionRequest) -> PredictionResponse:
         """Make prediction"""
         ACTIVE_REQUESTS.inc()
@@ -277,11 +243,6 @@ class ModelService:
                 with torch.no_grad():
                     predictions = self._model.predict_probabilities(X_tensor)
                     predictions_np = predictions.cpu().numpy()[0]
-
-                # Apply MBTI modifiers
-                mbti_type = request.socioeconomic.mbti_type
-                if mbti_type:
-                    predictions_np = self.apply_mbti_modifiers(predictions_np, mbti_type)
 
                 # Generate recommendations
                 top_k = 3
@@ -324,7 +285,6 @@ class ModelService:
                     fertilization_recommendations=fertilization_recs,
                     overall_strategy=overall_strategy,
                     confidence_score=float(predictions_np[top_indices[0]]),
-                    mbti_tailored=mbti_type is not None,
                     timestamp=datetime.now().isoformat()
                 )
 

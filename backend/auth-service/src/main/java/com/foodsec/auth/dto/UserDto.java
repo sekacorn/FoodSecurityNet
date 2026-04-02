@@ -27,7 +27,6 @@ public class UserDto {
     private String email;
     private String fullName;
     private Role role;
-    private String mbtiType;
     private SsoProvider ssoProvider;
     private boolean mfaEnabled;
     private boolean emailVerified;

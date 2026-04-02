@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 // Create axios instance
 const api = axios.create({
@@ -41,14 +41,18 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refresh_token');
         if (refreshToken) {
           const response = await axios.post(`${API_URL}/api/auth/refresh`, {
-            refresh_token: refreshToken,
+            refreshToken,
           });
 
-          const { access_token } = response.data;
-          localStorage.setItem('access_token', access_token);
+          const accessToken = response.data?.data?.accessToken;
+          if (!accessToken) {
+            throw new Error('Refresh response did not include an access token');
+          }
+
+          localStorage.setItem('access_token', accessToken);
 
           // Retry original request with new token
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return api(originalRequest);
         }
       } catch (refreshError) {

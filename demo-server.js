@@ -1,4 +1,3 @@
-// Simple Node.js mock server for FoodSecurityNet demo
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -8,47 +7,119 @@ const app = express();
 const PORT = 8080;
 const JWT_SECRET = 'demo-secret-key';
 
-// Middleware
 app.use(cors());
 app.use(bodyParser.json());
 
-// In-memory data store
+let nextUserId = 2;
 let users = [
   {
     id: 1,
     username: 'demo',
     email: 'demo@foodsecuritynet.org',
-    password: 'Demo123!', // In production, this would be hashed
-    firstName: 'Demo',
-    lastName: 'User',
-    mbtiType: 'INTJ',
+    password: 'Demo123!',
+    fullName: 'Demo User',
     role: 'USER',
     mfaEnabled: false,
-    emailVerified: true
-  }
+    emailVerified: true,
+    isActive: true,
+    lastLogin: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
-let sessions = [];
-let annotations = [];
+let sessions = [
+  {
+    id: 1,
+    sessionId: 'session-demo-1',
+    sessionName: 'Demo Planning Session',
+    creatorId: '1',
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString(),
+  },
+];
 
-// Helper function to generate JWT
-const generateToken = (user) => {
-  return jwt.sign(
+const sessionUsers = {
+  'session-demo-1': ['1', 'advisor-1'],
+};
+
+const sessionHistory = {
+  'session-demo-1': [
+    {
+      id: 1,
+      sessionId: 'session-demo-1',
+      userId: 'advisor-1',
+      actionType: 'CHAT_MESSAGE',
+      actionData: {
+        userName: 'Field Advisor',
+        content: 'Welcome to the mock collaboration room.',
+        timestamp: new Date().toISOString(),
+      },
+      createdAt: new Date().toISOString(),
+    },
+  ],
+};
+
+const visualizations = [
+  {
+    id: 101,
+    name: 'Demo Soil Moisture Map',
+    type: 'heatmap',
+    data: [
+      { x: -4, y: 0, z: -2, width: 1.5, height: 2.6, depth: 1.5 },
+      { x: -2, y: 0, z: -2, width: 1.5, height: 3.1, depth: 1.5 },
+      { x: 0, y: 0, z: -2, width: 1.5, height: 1.8, depth: 1.5 },
+      { x: 2, y: 0, z: -2, width: 1.5, height: 2.4, depth: 1.5 },
+      { x: 4, y: 0, z: -2, width: 1.5, height: 3.4, depth: 1.5 },
+      { x: -4, y: 0, z: 0, width: 1.5, height: 2.2, depth: 1.5 },
+      { x: -2, y: 0, z: 0, width: 1.5, height: 2.9, depth: 1.5 },
+      { x: 0, y: 0, z: 0, width: 1.5, height: 3.7, depth: 1.5 },
+      { x: 2, y: 0, z: 0, width: 1.5, height: 2.1, depth: 1.5 },
+      { x: 4, y: 0, z: 0, width: 1.5, height: 1.9, depth: 1.5 },
+    ],
+  },
+];
+
+const buildLoginPayload = (user) => ({
+  accessToken: jwt.sign(
     {
       id: user.id,
       username: user.username,
       email: user.email,
       role: user.role,
-      mbtiType: user.mbtiType
     },
     JWT_SECRET,
     { expiresIn: '24h' }
-  );
-};
+  ),
+  refreshToken: `refresh-${user.id}`,
+  expiresIn: 86400,
+  tokenType: 'Bearer',
+  userId: user.id,
+  username: user.username,
+  email: user.email,
+  fullName: user.fullName,
+  role: user.role,
+  mfaEnabled: user.mfaEnabled,
+  mfaRequired: false,
+  emailVerified: user.emailVerified,
+});
 
-// Authentication middleware
+const buildUserDto = (user) => ({
+  id: user.id,
+  username: user.username,
+  email: user.email,
+  fullName: user.fullName,
+  role: user.role,
+  mfaEnabled: user.mfaEnabled,
+  emailVerified: user.emailVerified,
+  isActive: user.isActive,
+  lastLogin: user.lastLogin,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
+  const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
@@ -64,296 +135,247 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// ===== AUTH ENDPOINTS =====
-
-// Login
 app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-
-  const user = users.find(u => u.username === username && u.password === password);
+  const { usernameOrEmail, password } = req.body;
+  const user = users.find(
+    (candidate) =>
+      (candidate.username === usernameOrEmail || candidate.email === usernameOrEmail) &&
+      candidate.password === password
+  );
 
   if (!user) {
     return res.status(401).json({ message: 'Invalid username or password' });
   }
 
-  const token = generateToken(user);
-
-  res.json({
-    token,
-    refreshToken: `refresh_${token}`,
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      mbtiType: user.mbtiType,
-      role: user.role,
-      mfaEnabled: user.mfaEnabled,
-      emailVerified: user.emailVerified
-    }
-  });
+  user.lastLogin = new Date().toISOString();
+  user.updatedAt = new Date().toISOString();
+  res.json(buildLoginPayload(user));
 });
 
-// Register
 app.post('/api/auth/register', (req, res) => {
-  const { username, email, password, firstName, lastName, mbtiType } = req.body;
+  const { username, email, password, fullName } = req.body;
 
-  if (users.find(u => u.username === username || u.email === email)) {
+  if (users.some((user) => user.username === username || user.email === email)) {
     return res.status(400).json({ message: 'Username or email already exists' });
   }
 
-  const newUser = {
-    id: users.length + 1,
+  const user = {
+    id: nextUserId++,
     username,
     email,
     password,
-    firstName,
-    lastName,
-    mbtiType: mbtiType || 'INTJ',
+    fullName,
     role: 'USER',
     mfaEnabled: false,
-    emailVerified: true
+    emailVerified: true,
+    isActive: true,
+    lastLogin: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
-  users.push(newUser);
-  const token = generateToken(newUser);
-
+  users.push(user);
   res.status(201).json({
-    token,
-    refreshToken: `refresh_${token}`,
-    user: {
-      id: newUser.id,
-      username: newUser.username,
-      email: newUser.email,
-      firstName: newUser.firstName,
-      lastName: newUser.lastName,
-      mbtiType: newUser.mbtiType,
-      role: newUser.role,
-      mfaEnabled: newUser.mfaEnabled,
-      emailVerified: newUser.emailVerified
-    }
+    success: true,
+    message: 'User registered successfully',
+    data: buildUserDto(user),
   });
 });
 
-// Get current user
+app.post('/api/auth/refresh', (req, res) => {
+  const demoUser = users[0];
+  res.json(buildLoginPayload(demoUser));
+});
+
+app.post('/api/auth/logout', (_req, res) => {
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
 app.get('/api/auth/me', authenticateToken, (req, res) => {
-  const user = users.find(u => u.id === req.user.id);
+  const user = users.find((candidate) => candidate.id === req.user.id);
   if (!user) {
     return res.status(404).json({ message: 'User not found' });
   }
 
   res.json({
-    id: user.id,
-    username: user.username,
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    mbtiType: user.mbtiType,
-    role: user.role,
-    mfaEnabled: user.mfaEnabled,
-    emailVerified: user.emailVerified
+    success: true,
+    message: 'User retrieved successfully',
+    data: buildUserDto(user),
   });
 });
 
-// ===== DATA UPLOAD ENDPOINTS =====
+app.put('/api/auth/me', authenticateToken, (req, res) => {
+  const user = users.find((candidate) => candidate.id === req.user.id);
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
 
-app.post('/api/agri-integrator/upload/csv', authenticateToken, (req, res) => {
-  // Simulate CSV upload
+  user.fullName = req.body.fullName || user.fullName;
+  user.email = req.body.email || user.email;
+  user.updatedAt = new Date().toISOString();
+
   res.json({
-    message: 'CSV data uploaded successfully',
-    recordsProcessed: 150,
-    dataType: 'agricultural'
+    success: true,
+    message: 'User updated successfully',
+    data: buildUserDto(user),
   });
 });
 
-app.post('/api/agri-integrator/upload/json', authenticateToken, (req, res) => {
-  // Simulate JSON upload
+app.post('/api/auth/mfa/setup', authenticateToken, (_req, res) => {
   res.json({
-    message: 'JSON data uploaded successfully',
-    recordsProcessed: 75,
-    dataType: 'environmental'
-  });
-});
-
-// ===== SESSION ENDPOINTS =====
-
-app.get('/api/user-session/sessions', authenticateToken, (req, res) => {
-  const userSessions = sessions.filter(s => s.userId === req.user.id);
-  res.json(userSessions);
-});
-
-app.post('/api/user-session/sessions', authenticateToken, (req, res) => {
-  const { name, description } = req.body;
-
-  const newSession = {
-    id: sessions.length + 1,
-    userId: req.user.id,
-    name: name || 'New Session',
-    description: description || '',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-
-  sessions.push(newSession);
-  res.status(201).json(newSession);
-});
-
-// ===== VISUALIZATION ENDPOINTS =====
-
-app.get('/api/agri-visualizer/visualizations/:sessionId', authenticateToken, (req, res) => {
-  // Return sample 3D visualization data
-  res.json({
-    id: 1,
-    sessionId: parseInt(req.params.sessionId),
-    visualizationType: 'heatmap',
+    success: true,
+    message: 'MFA setup initiated',
     data: {
-      type: 'mesh',
-      geometry: 'plane',
-      dimensions: { width: 100, height: 100 },
-      dataPoints: generateSampleHeatmapData()
+      secret: 'DEMO-MFA-SECRET',
+      qr_code:
+        'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=otpauth://totp/FoodSecurityNet:demo?secret=DEMO-MFA-SECRET',
     },
-    metadata: {
-      title: 'Soil Moisture Heatmap',
-      region: 'Sample Farm Region',
-      date: new Date().toISOString()
-    }
   });
 });
 
-app.post('/api/agri-visualizer/generate', authenticateToken, (req, res) => {
+app.post('/api/auth/mfa/verify', authenticateToken, (req, res) => {
+  if (!req.body.code || String(req.body.code).length !== 6) {
+    return res.status(400).json({ message: 'Invalid MFA code' });
+  }
+
+  const user = users.find((candidate) => candidate.id === req.user.id);
+  user.mfaEnabled = true;
+  user.updatedAt = new Date().toISOString();
+
   res.json({
-    id: Math.floor(Math.random() * 1000),
-    status: 'completed',
-    visualizationType: req.body.type || 'heatmap',
-    message: 'Visualization generated successfully'
+    success: true,
+    message: 'MFA enabled successfully',
+    data: { mfaEnabled: true },
   });
 });
 
-// ===== AI PREDICTION ENDPOINTS =====
+app.post('/api/auth/mfa/disable', authenticateToken, (req, res) => {
+  if (!req.body.code || String(req.body.code).length !== 6) {
+    return res.status(400).json({ message: 'Invalid MFA code' });
+  }
 
-app.post('/api/ai/predict', authenticateToken, (req, res) => {
-  // Return mock farming predictions
+  const user = users.find((candidate) => candidate.id === req.user.id);
+  user.mfaEnabled = false;
+  user.updatedAt = new Date().toISOString();
+
   res.json({
-    cropRecommendation: 'Wheat',
-    cropConfidence: 0.87,
-    irrigationStrategy: 'Drip irrigation every 2 days',
-    irrigationConfidence: 0.92,
-    fertilizationPlan: 'Nitrogen-rich fertilizer, 50kg per hectare',
-    fertilizerConfidence: 0.85,
-    yieldPrediction: 4.2,
-    yieldUnit: 'tons/hectare',
-    riskFactors: ['Drought risk: Medium', 'Pest risk: Low'],
-    mbtiPersonalization: `Tailored for ${req.user.mbtiType}: Focus on strategic planning and data-driven decisions`
+    success: true,
+    message: 'MFA disabled successfully',
+    data: null,
   });
 });
-
-// ===== LLM QUERY ENDPOINTS =====
 
 app.post('/api/llm/query', authenticateToken, (req, res) => {
-  const { query } = req.body;
+  const { query = '' } = req.body;
+  const lower = query.toLowerCase();
 
-  // Mock LLM responses based on query keywords
-  let response = '';
-
-  if (query.toLowerCase().includes('weather') || query.toLowerCase().includes('climate')) {
-    response = `Based on current climate data, the region shows moderate temperatures with adequate rainfall. For ${req.user.mbtiType} types, I recommend focusing on long-term climate adaptation strategies and data-backed irrigation planning.`;
-  } else if (query.toLowerCase().includes('crop') || query.toLowerCase().includes('plant')) {
-    response = `Wheat and corn are excellent crop choices for your region. The AI model suggests wheat with 87% confidence based on soil composition and climate patterns. As an ${req.user.mbtiType}, you might appreciate the systematic approach to crop rotation.`;
-  } else if (query.toLowerCase().includes('soil')) {
-    response = `Soil analysis indicates loamy texture with pH 6.5, suitable for most crops. Nitrogen levels are adequate, but phosphorus supplementation recommended. The data-driven approach aligns well with ${req.user.mbtiType} decision-making preferences.`;
-  } else {
-    response = `I'm FoodSecurityNet's AI assistant. I can help with farming predictions, crop recommendations, irrigation strategies, and soil analysis. What specific information would you like to know? (Personalized for ${req.user.mbtiType})`;
+  let response = 'Mock assistant response: focus on practical, data-backed next steps.';
+  if (lower.includes('soil')) {
+    response = 'Mock analysis: soil pH and nutrient balance look stable, but phosphorus supplementation would improve yield consistency.';
+  } else if (lower.includes('water') || lower.includes('irrigation')) {
+    response = 'Mock analysis: switch to shorter, more frequent irrigation cycles to reduce runoff and improve moisture retention.';
+  } else if (lower.includes('crop') || lower.includes('plant')) {
+    response = 'Mock analysis: wheat and maize remain the strongest candidates for this sample dataset based on moisture and nutrient patterns.';
   }
 
   res.json({
-    query,
+    status: 'success',
     response,
-    confidence: 0.89,
-    sources: ['FAO Database', 'NOAA Climate Data', 'Local Soil Reports'],
-    mbtiPersonalization: req.user.mbtiType
   });
 });
 
-// ===== COLLABORATION ENDPOINTS =====
+app.post('/api/llm/analyze', authenticateToken, (req, res) => {
+  const analysisType = req.body.analysisType || 'dataset';
+
+  res.json({
+    status: 'success',
+    analysis: {
+      analysisType,
+      insights:
+        `Mock ${analysisType} analysis complete. The sample dataset suggests stable soil health, moderate water efficiency, and a near-term opportunity to improve fertilization timing.`,
+      timestamp: new Date().toISOString(),
+    },
+  });
+});
+
+app.get('/api/visualizations/list', authenticateToken, (_req, res) => {
+  res.json({
+    status: 'success',
+    data: visualizations,
+    totalCount: visualizations.length,
+  });
+});
+
+app.get('/api/visualizations/:id', authenticateToken, (req, res) => {
+  const visualization = visualizations.find((item) => String(item.id) === String(req.params.id));
+  if (!visualization) {
+    return res.status(404).json({ error: 'Visualization not found' });
+  }
+
+  res.json({
+    status: 'success',
+    data: visualization,
+  });
+});
 
 app.get('/api/collaboration/sessions', authenticateToken, (req, res) => {
-  res.json([
-    {
-      id: 1,
-      name: 'Team Planning Session',
-      participants: ['demo', 'user2'],
-      status: 'active',
-      createdAt: new Date().toISOString()
-    }
-  ]);
+  const filteredSessions = sessions.filter((session) => !req.query.creatorId || session.creatorId === String(req.query.creatorId));
+  res.json({
+    status: 'success',
+    sessions: filteredSessions,
+    count: filteredSessions.length,
+  });
 });
 
-// ===== ANNOTATION ENDPOINTS =====
-
-app.get('/api/user-session/annotations/:sessionId', authenticateToken, (req, res) => {
-  const sessionAnnotations = annotations.filter(a => a.sessionId === parseInt(req.params.sessionId));
-  res.json(sessionAnnotations);
-});
-
-app.post('/api/user-session/annotations', authenticateToken, (req, res) => {
-  const { sessionId, content, position } = req.body;
-
-  const newAnnotation = {
-    id: annotations.length + 1,
-    sessionId,
-    userId: req.user.id,
-    content,
-    position,
-    createdAt: new Date().toISOString()
+app.post('/api/collaboration/sessions/create', authenticateToken, (req, res) => {
+  const session = {
+    id: sessions.length + 1,
+    sessionId: `session-demo-${sessions.length + 1}`,
+    sessionName: req.body.sessionName || 'Untitled Session',
+    creatorId: String(req.body.creatorId || req.user.id),
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString(),
   };
 
-  annotations.push(newAnnotation);
-  res.status(201).json(newAnnotation);
+  sessions.push(session);
+  sessionUsers[session.sessionId] = [String(req.user.id)];
+  sessionHistory[session.sessionId] = [];
+
+  res.json({
+    status: 'success',
+    session,
+  });
 });
 
-// Helper function to generate sample heatmap data
-function generateSampleHeatmapData() {
-  const data = [];
-  for (let x = 0; x < 20; x++) {
-    for (let z = 0; z < 20; z++) {
-      data.push({
-        x: x * 5,
-        y: Math.sin(x * 0.5) * Math.cos(z * 0.5) * 10 + 20,
-        z: z * 5,
-        value: Math.random() * 100
-      });
-    }
-  }
-  return data;
-}
+app.get('/api/collaboration/sessions/:sessionId/users', authenticateToken, (req, res) => {
+  res.json({
+    status: 'success',
+    users: sessionUsers[req.params.sessionId] || [String(req.user.id)],
+  });
+});
 
-// Health check
-app.get('/health', (req, res) => {
+app.get('/api/collaboration/sessions/:sessionId/history', authenticateToken, (req, res) => {
+  res.json({
+    status: 'success',
+    history: sessionHistory[req.params.sessionId] || [],
+    count: (sessionHistory[req.params.sessionId] || []).length,
+  });
+});
+
+app.get('/api/system/resources', (_req, res) => {
+  res.json({
+    cpu: 34.2,
+    memory: 58.6,
+    gpu: 12.4,
+    disk: 41.7,
+  });
+});
+
+app.get('/health', (_req, res) => {
   res.json({ status: 'UP', service: 'FoodSecurityNet Demo API' });
 });
 
-// Start server
 app.listen(PORT, () => {
-  console.log(`
-╔═══════════════════════════════════════════════════════════╗
-║        FoodSecurityNet Demo Server Running               ║
-╠═══════════════════════════════════════════════════════════╣
-║  API Server: http://localhost:${PORT}                        ║
-║                                                           ║
-║  Test Credentials:                                        ║
-║  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ║
-║  Username: demo                                           ║
-║  Password: Demo123!                                       ║
-║  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ║
-║                                                           ║
-║  Features Available:                                      ║
-║  • Login/Registration                                     ║
-║  • Data Upload (CSV/JSON)                                 ║
-║  • AI Predictions                                         ║
-║  • LLM Chat Assistant                                     ║
-║  • 3D Visualizations                                      ║
-║  • MBTI Personalization (INTJ)                            ║
-╚═══════════════════════════════════════════════════════════╝
-  `);
+  console.log(`FoodSecurityNet mock API running at http://localhost:${PORT}`);
+  console.log('Demo login: demo@foodsecuritynet.org / Demo123!');
 });

@@ -53,11 +53,16 @@ public class GatewayConfig {
                                         .setMethods(HttpMethod.GET, HttpMethod.POST)))
                         .uri(authServiceUrl))
 
+                .route("auth-oauth2", r -> r
+                        .path("/oauth2/**", "/login/oauth2/**", "/saml2/**")
+                        .filters(f -> f.stripPrefix(0))
+                        .uri(authServiceUrl))
+
                 // Agricultural Data Integrator Routes
                 .route("agri-integrator", r -> r
                         .path("/api/agri-data/**")
                         .filters(f -> f
-                                .stripPrefix(0)
+                                .rewritePath("/api/agri-data/?(?<segment>.*)", "/agri-integrator/api/v1/data/${segment}")
                                 .circuitBreaker(config -> config
                                         .setName("agriIntegratorCircuitBreaker")
                                         .setFallbackUri("forward:/fallback/agri-data"))
@@ -70,7 +75,7 @@ public class GatewayConfig {
                 .route("agri-visualizer", r -> r
                         .path("/api/visualizations/**")
                         .filters(f -> f
-                                .stripPrefix(0)
+                                .rewritePath("/api/visualizations/?(?<segment>.*)", "/agri-visualizer/api/v1/visualizations/${segment}")
                                 .circuitBreaker(config -> config
                                         .setName("agriVisualizerCircuitBreaker")
                                         .setFallbackUri("forward:/fallback/visualizations"))
@@ -83,7 +88,7 @@ public class GatewayConfig {
                 .route("user-session", r -> r
                         .path("/api/sessions/**", "/api/preferences/**")
                         .filters(f -> f
-                                .stripPrefix(0)
+                                .rewritePath("/api/sessions/?(?<segment>.*)", "/user-session/api/v1/sessions/${segment}")
                                 .circuitBreaker(config -> config
                                         .setName("userSessionCircuitBreaker")
                                         .setFallbackUri("forward:/fallback/sessions"))
@@ -95,7 +100,7 @@ public class GatewayConfig {
                 .route("llm-service", r -> r
                         .path("/api/llm/**", "/api/insights/**")
                         .filters(f -> f
-                                .stripPrefix(0)
+                                .rewritePath("/api/llm/?(?<segment>.*)", "/llm-service/api/v1/llm/${segment}")
                                 .circuitBreaker(config -> config
                                         .setName("llmServiceCircuitBreaker")
                                         .setFallbackUri("forward:/fallback/llm"))
@@ -107,12 +112,18 @@ public class GatewayConfig {
                 .route("collaboration-service", r -> r
                         .path("/api/collaboration/**", "/api/forums/**", "/api/resources/**")
                         .filters(f -> f
-                                .stripPrefix(0)
+                                .rewritePath("/api/collaboration/?(?<segment>.*)", "/collaboration/api/v1/collaboration/${segment}")
                                 .circuitBreaker(config -> config
                                         .setName("collaborationCircuitBreaker")
                                         .setFallbackUri("forward:/fallback/collaboration"))
                                 .retry(config -> config
                                         .setRetries(2)))
+                        .uri(collaborationServiceUrl))
+
+                .route("collaboration-websocket", r -> r
+                        .path("/ws/**", "/ws")
+                        .filters(f -> f
+                                .rewritePath("/ws/?(?<segment>.*)", "/collaboration/ws/${segment}"))
                         .uri(collaborationServiceUrl))
 
                 // Health Check Routes (No Authentication Required)

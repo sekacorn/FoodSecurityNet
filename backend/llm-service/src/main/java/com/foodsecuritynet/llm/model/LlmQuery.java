@@ -35,9 +35,6 @@ public class LlmQuery {
     @Column(name = "query_type")
     private String queryType;
 
-    @Column(name = "mbti_type", length = 4)
-    private String mbtiType;
-
     @Column(name = "context_data", columnDefinition = "TEXT")
     private String contextData;
 

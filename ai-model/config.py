@@ -30,25 +30,3 @@ VALIDATION_SPLIT = config('VALIDATION_SPLIT', default=0.2, cast=float)
 CROP_TYPES = ['maize', 'wheat', 'rice', 'sorghum', 'millet', 'cassava', 'beans', 'vegetables']
 IRRIGATION_METHODS = ['drip', 'sprinkler', 'flood', 'furrow', 'rainfed']
 FERTILIZATION_STRATEGIES = ['organic', 'synthetic', 'mixed', 'precision', 'traditional']
-MBTI_TYPES = ['INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP',
-              'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP']
-
-# MBTI Recommendation Modifiers
-MBTI_PREFERENCES = {
-    'INTJ': {'innovation_weight': 1.3, 'efficiency_focus': 1.2, 'data_driven': 1.5},
-    'INTP': {'innovation_weight': 1.4, 'efficiency_focus': 1.1, 'data_driven': 1.4},
-    'ENTJ': {'innovation_weight': 1.2, 'efficiency_focus': 1.4, 'data_driven': 1.3},
-    'ENTP': {'innovation_weight': 1.5, 'efficiency_focus': 1.0, 'data_driven': 1.2},
-    'INFJ': {'innovation_weight': 1.1, 'efficiency_focus': 1.0, 'data_driven': 1.1, 'sustainability_focus': 1.4},
-    'INFP': {'innovation_weight': 1.0, 'efficiency_focus': 0.9, 'data_driven': 1.0, 'sustainability_focus': 1.5},
-    'ENFJ': {'innovation_weight': 1.1, 'efficiency_focus': 1.1, 'data_driven': 1.0, 'sustainability_focus': 1.3},
-    'ENFP': {'innovation_weight': 1.2, 'efficiency_focus': 0.9, 'data_driven': 1.0, 'sustainability_focus': 1.2},
-    'ISTJ': {'innovation_weight': 0.8, 'efficiency_focus': 1.3, 'data_driven': 1.2, 'traditional_preference': 1.3},
-    'ISFJ': {'innovation_weight': 0.7, 'efficiency_focus': 1.1, 'data_driven': 1.0, 'traditional_preference': 1.4},
-    'ESTJ': {'innovation_weight': 0.9, 'efficiency_focus': 1.5, 'data_driven': 1.3, 'traditional_preference': 1.2},
-    'ESFJ': {'innovation_weight': 0.8, 'efficiency_focus': 1.2, 'data_driven': 1.1, 'traditional_preference': 1.2},
-    'ISTP': {'innovation_weight': 1.2, 'efficiency_focus': 1.2, 'data_driven': 1.3, 'hands_on': 1.4},
-    'ISFP': {'innovation_weight': 1.0, 'efficiency_focus': 0.9, 'data_driven': 0.9, 'sustainability_focus': 1.3},
-    'ESTP': {'innovation_weight': 1.1, 'efficiency_focus': 1.3, 'data_driven': 1.2, 'hands_on': 1.3},
-    'ESFP': {'innovation_weight': 1.0, 'efficiency_focus': 1.0, 'data_driven': 1.0, 'sustainability_focus': 1.1}
-}

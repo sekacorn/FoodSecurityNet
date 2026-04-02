@@ -2,17 +2,82 @@ import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { toast } from 'react-toastify';
 
+const formats = [
+  {
+    value: 'png',
+    label: 'PNG Image',
+    icon: (
+      <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.8}
+          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2 1.586-1.586a2 2 0 012.828 0L20 14m-8-8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+        />
+      </svg>
+    ),
+  },
+  {
+    value: 'svg',
+    label: 'SVG Vector',
+    icon: (
+      <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.8}
+          d="M7 7h10v10H7zM7 12h10M12 7v10"
+        />
+      </svg>
+    ),
+  },
+  {
+    value: 'stl',
+    label: 'STL 3D Model',
+    icon: (
+      <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.8}
+          d="M12 4l7 4-7 4-7-4 7-4zm7 4v8l-7 4m0-8L5 8m7 4v8"
+        />
+      </svg>
+    ),
+  },
+  {
+    value: 'json',
+    label: 'JSON Data',
+    icon: (
+      <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.8}
+          d="M9 4H7a2 2 0 00-2 2v2m0 8v2a2 2 0 002 2h2m6-16h2a2 2 0 012 2v2m0 8v2a2 2 0 01-2 2h-2M10 9l-2 3 2 3m4-6 2 3-2 3"
+        />
+      </svg>
+    ),
+  },
+  {
+    value: 'csv',
+    label: 'CSV Data',
+    icon: (
+      <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.8}
+          d="M9 17v-6m3 6V7m3 10v-4M8 3h8l5 5v11a2 2 0 01-2 2H8a2 2 0 01-2-2V5a2 2 0 012-2z"
+        />
+      </svg>
+    ),
+  },
+];
+
 const ExportTool = ({ data, fileName = 'export', canvasRef = null }) => {
   const [exporting, setExporting] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState('png');
-
-  const formats = [
-    { value: 'png', label: 'PNG Image', icon: '🖼️' },
-    { value: 'svg', label: 'SVG Vector', icon: '📐' },
-    { value: 'stl', label: 'STL 3D Model', icon: '🔷' },
-    { value: 'json', label: 'JSON Data', icon: '📄' },
-    { value: 'csv', label: 'CSV Data', icon: '📊' },
-  ];
 
   const exportAsPNG = async () => {
     try {
@@ -21,7 +86,6 @@ const ExportTool = ({ data, fileName = 'export', canvasRef = null }) => {
         const dataUrl = canvas.toDataURL('image/png');
         downloadFile(dataUrl, `${fileName}.png`);
       } else {
-        // Fallback: export as data URL
         toast.warning('No canvas available. Exporting data as JSON instead.');
         exportAsJSON();
       }
@@ -38,11 +102,9 @@ const ExportTool = ({ data, fileName = 'export', canvasRef = null }) => {
         return;
       }
 
-      // Create simple SVG from data
       let svgContent = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600">\n';
       svgContent += '  <rect width="800" height="600" fill="#f0f0f0"/>\n';
 
-      // Add data visualization (simplified)
       if (Array.isArray(data)) {
         data.forEach((item, index) => {
           const x = (index * 50) % 800;
@@ -70,24 +132,21 @@ const ExportTool = ({ data, fileName = 'export', canvasRef = null }) => {
         return;
       }
 
-      // Create simple STL file (ASCII format)
       let stlContent = 'solid exported_model\n';
 
-      // Generate triangles from data (simplified)
       data.forEach((item) => {
         const x = item.x || 0;
         const y = item.y || 0;
         const z = item.z || 0;
         const size = 1;
 
-        // Create a simple cube face
-        stlContent += `  facet normal 0 0 1\n`;
-        stlContent += `    outer loop\n`;
+        stlContent += '  facet normal 0 0 1\n';
+        stlContent += '    outer loop\n';
         stlContent += `      vertex ${x} ${y} ${z + size}\n`;
         stlContent += `      vertex ${x + size} ${y} ${z + size}\n`;
         stlContent += `      vertex ${x + size} ${y + size} ${z + size}\n`;
-        stlContent += `    endloop\n`;
-        stlContent += `  endfacet\n`;
+        stlContent += '    endloop\n';
+        stlContent += '  endfacet\n';
       });
 
       stlContent += 'endsolid exported_model\n';
@@ -127,22 +186,18 @@ const ExportTool = ({ data, fileName = 'export', canvasRef = null }) => {
         return;
       }
 
-      // Get headers from first object
       const headers = data.length > 0 ? Object.keys(data[0]) : [];
-
-      // Create CSV content
-      let csvContent = headers.join(',') + '\n';
+      let csvContent = `${headers.join(',')}\n`;
 
       data.forEach((row) => {
         const values = headers.map((header) => {
           const value = row[header];
-          // Escape commas and quotes
           if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
             return `"${value.replace(/"/g, '""')}"`;
           }
           return value;
         });
-        csvContent += values.join(',') + '\n';
+        csvContent += `${values.join(',')}\n`;
       });
 
       const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -201,25 +256,25 @@ const ExportTool = ({ data, fileName = 'export', canvasRef = null }) => {
     <div className="bg-white rounded-lg shadow p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Export Data</h3>
 
-      {/* Format Selection */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 mb-6">
         {formats.map((format) => (
           <button
             key={format.value}
             onClick={() => setSelectedFormat(format.value)}
-            className={`p-4 rounded-lg border-2 transition-all ${
+            className={`flex min-h-[120px] flex-col items-center justify-center rounded-lg border-2 p-4 text-center transition-all ${
               selectedFormat === format.value
                 ? 'border-primary-600 bg-primary-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}
           >
-            <div className="text-3xl mb-2">{format.icon}</div>
-            <div className="text-sm font-medium text-gray-900">{format.label}</div>
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-700">
+              {format.icon}
+            </div>
+            <div className="text-sm font-medium leading-5 text-gray-900">{format.label}</div>
           </button>
         ))}
       </div>
 
-      {/* File Name Input */}
       <div className="mb-6">
         <label htmlFor="export-filename" className="block text-sm font-medium text-gray-700 mb-2">
           File Name
@@ -233,7 +288,6 @@ const ExportTool = ({ data, fileName = 'export', canvasRef = null }) => {
         />
       </div>
 
-      {/* Export Button */}
       <button
         onClick={handleExport}
         disabled={exporting || !data}
@@ -268,7 +322,6 @@ const ExportTool = ({ data, fileName = 'export', canvasRef = null }) => {
         )}
       </button>
 
-      {/* Info Text */}
       <p className="mt-4 text-xs text-gray-500 text-center">
         Export your data in various formats for use in other applications
       </p>

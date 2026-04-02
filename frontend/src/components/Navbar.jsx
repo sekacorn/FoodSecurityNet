@@ -19,17 +19,18 @@ const Navbar = ({ user, onLogout }) => {
   ];
 
   return (
-    <nav className="bg-white shadow-md sticky top-0 z-50">
+    <nav className="bg-white shadow-md sticky top-0 z-50" aria-label="Primary">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Logo and Brand */}
           <div className="flex items-center">
-            <Link to="/" className="flex items-center space-x-2">
+            <Link to="/" className="flex items-center space-x-2" aria-label="FoodSecurityNet home">
               <svg
                 className="w-8 h-8 text-primary-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -51,6 +52,7 @@ const Navbar = ({ user, onLogout }) => {
                 <Link
                   key={link.path}
                   to={link.path}
+                  aria-current={isActive(link.path) ? 'page' : undefined}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     isActive(link.path)
                       ? 'bg-primary-100 text-primary-700'
@@ -113,6 +115,7 @@ const Navbar = ({ user, onLogout }) => {
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 {mobileMenuOpen ? (
                   <path
@@ -147,6 +150,7 @@ const Navbar = ({ user, onLogout }) => {
                   key={link.path}
                   to={link.path}
                   onClick={() => setMobileMenuOpen(false)}
+                  aria-current={isActive(link.path) ? 'page' : undefined}
                   className={`block px-3 py-2 rounded-md text-base font-medium ${
                     isActive(link.path)
                       ? 'bg-primary-100 text-primary-700'

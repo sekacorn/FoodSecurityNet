@@ -14,6 +14,5 @@ import java.util.Map;
 public class QueryContext {
     private String query;
     private String userId;
-    private String mbtiType;
     private Map<String, Object> context;
 }

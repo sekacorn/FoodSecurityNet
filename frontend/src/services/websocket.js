@@ -1,70 +1,74 @@
-import { io } from 'socket.io-client';
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8080';
 
 class WebSocketService {
   constructor() {
-    this.socket = null;
+    this.client = null;
     this.connected = false;
+    this.connectPromise = null;
     this.eventHandlers = {};
+    this.sessionSubscriptions = [];
   }
 
   connect() {
-    if (this.socket && this.connected) {
-      console.log('WebSocket already connected');
-      return;
+    if (this.connected) {
+      return Promise.resolve();
     }
 
-    const token = localStorage.getItem('access_token');
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
 
-    this.socket = io(WS_URL, {
-      transports: ['websocket', 'polling'],
-      auth: {
-        token: token,
-      },
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+    this.connectPromise = new Promise((resolve, reject) => {
+      this.client = new Client({
+        webSocketFactory: () => new SockJS(`${WS_BASE_URL}/ws`),
+        reconnectDelay: 5000,
+        debug: () => {},
+        onConnect: () => {
+          this.connected = true;
+          this.emit('connected');
+          resolve();
+        },
+        onStompError: (frame) => {
+          const error = new Error(frame.headers.message || 'STOMP error');
+          this.emit('error', error);
+          reject(error);
+        },
+        onWebSocketError: (event) => {
+          this.emit('error', event);
+          reject(event);
+        },
+        onDisconnect: () => {
+          this.connected = false;
+          this.clearSessionSubscriptions();
+          this.emit('disconnected');
+          this.connectPromise = null;
+        },
+      });
+
+      this.client.activate();
     });
 
-    this.socket.on('connect', () => {
-      console.log('WebSocket connected');
-      this.connected = true;
-      this.emit('connected');
-    });
-
-    this.socket.on('disconnect', (reason) => {
-      console.log('WebSocket disconnected:', reason);
-      this.connected = false;
-      this.emit('disconnected', reason);
-    });
-
-    this.socket.on('error', (error) => {
-      console.error('WebSocket error:', error);
-      this.emit('error', error);
-    });
-
-    this.socket.on('connect_error', (error) => {
-      console.error('WebSocket connection error:', error);
-      this.emit('error', error);
-    });
-
-    // Register for all events
-    this.socket.onAny((eventName, ...args) => {
-      this.emit(eventName, ...args);
-    });
+    return this.connectPromise;
   }
 
   disconnect() {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-      this.connected = false;
-      this.eventHandlers = {};
+    this.clearSessionSubscriptions();
+    if (this.client) {
+      this.client.deactivate();
+      this.client = null;
     }
+    this.connected = false;
+    this.connectPromise = null;
   }
 
-  // Event handling
+  clearSessionSubscriptions() {
+    this.sessionSubscriptions.forEach((subscription) => subscription.unsubscribe());
+    this.sessionSubscriptions = [];
+  }
+
   on(event, handler) {
     if (!this.eventHandlers[event]) {
       this.eventHandlers[event] = [];
@@ -94,80 +98,115 @@ class WebSocketService {
     }
   }
 
-  // Send event to server
-  send(event, data) {
-    if (this.socket && this.connected) {
-      this.socket.emit(event, data);
-    } else {
-      console.error('WebSocket not connected');
-    }
+  async subscribeToSession(sessionId) {
+    await this.connect();
+    this.clearSessionSubscriptions();
+
+    const sessionSubscription = this.client.subscribe(`/topic/session/${sessionId}`, (frame) => {
+      const message = JSON.parse(frame.body);
+
+      switch (message.type) {
+        case 'USER_JOINED':
+          this.emit('user-joined', message);
+          break;
+        case 'USER_LEFT':
+          this.emit('user-left', message);
+          break;
+        case 'USER_ACTION':
+          if (message.actionType === 'CHAT_MESSAGE') {
+            this.emit('message', {
+              userId: message.userId,
+              userName: message.data?.userName || 'Collaborator',
+              content: message.data?.content || '',
+              timestamp: message.data?.timestamp || Date.now(),
+            });
+          } else {
+            this.emit('action', message);
+          }
+          break;
+        case 'ANNOTATION':
+          this.emit('annotation', message);
+          break;
+        default:
+          this.emit('message-received', message);
+      }
+    });
+
+    const cursorSubscription = this.client.subscribe(
+      `/topic/session/${sessionId}/cursors`,
+      (frame) => {
+        this.emit('cursor-move', JSON.parse(frame.body));
+      }
+    );
+
+    this.sessionSubscriptions.push(sessionSubscription, cursorSubscription);
   }
 
-  // Collaboration methods
-  joinSession(sessionId, user) {
-    this.send('join-session', {
-      sessionId,
-      userId: user.id,
-      userName: user.name,
+  async joinSession(sessionId, user) {
+    await this.subscribeToSession(sessionId);
+
+    this.client.publish({
+      destination: `/app/session/${sessionId}/join`,
+      body: JSON.stringify({
+        userId: user.id,
+        userName: user.name,
+      }),
     });
   }
 
-  leaveSession(sessionId) {
-    this.send('leave-session', { sessionId });
+  leaveSession(sessionId, user) {
+    if (!this.client || !this.connected) return;
+
+    this.client.publish({
+      destination: `/app/session/${sessionId}/leave`,
+      body: JSON.stringify({
+        userId: user.id,
+      }),
+    });
+
+    this.clearSessionSubscriptions();
   }
 
   sendMessage(sessionId, message) {
-    this.send('message', {
-      sessionId,
-      ...message,
+    if (!this.client || !this.connected) return;
+
+    this.client.publish({
+      destination: `/app/session/${sessionId}/action`,
+      body: JSON.stringify({
+        userId: message.userId,
+        actionType: 'CHAT_MESSAGE',
+        data: {
+          content: message.content,
+          userName: message.userName,
+          timestamp: message.timestamp,
+        },
+      }),
     });
   }
 
   sendCursorPosition(sessionId, position) {
-    this.send('cursor-move', {
-      sessionId,
-      ...position,
+    if (!this.client || !this.connected) return;
+
+    this.client.publish({
+      destination: `/app/session/${sessionId}/cursor`,
+      body: JSON.stringify(position),
     });
   }
 
-  // Data sync methods
-  syncData(sessionId, data) {
-    this.send('sync-data', {
-      sessionId,
-      data,
-    });
-  }
-
-  requestDataSync(sessionId) {
-    this.send('request-sync', { sessionId });
-  }
-
-  // Annotation methods
   addAnnotation(sessionId, annotation) {
-    this.send('add-annotation', {
-      sessionId,
-      annotation,
+    if (!this.client || !this.connected) return;
+
+    this.client.publish({
+      destination: `/app/session/${sessionId}/annotation`,
+      body: JSON.stringify(annotation),
     });
   }
 
-  removeAnnotation(sessionId, annotationId) {
-    this.send('remove-annotation', {
-      sessionId,
-      annotationId,
-    });
-  }
-
-  // Utility methods
   isConnected() {
     return this.connected;
   }
-
-  getSocket() {
-    return this.socket;
-  }
 }
 
-// Create singleton instance
 const websocketService = new WebSocketService();
 
 export { websocketService };

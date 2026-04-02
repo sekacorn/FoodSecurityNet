@@ -83,37 +83,6 @@ export const validatePassword = (password, options = {}) => {
   return { valid: true };
 };
 
-// Validate MBTI type
-export const validateMBTI = (mbti) => {
-  const validTypes = [
-    'ISTJ',
-    'ISFJ',
-    'INFJ',
-    'INTJ',
-    'ISTP',
-    'ISFP',
-    'INFP',
-    'INTP',
-    'ESTP',
-    'ESFP',
-    'ENFP',
-    'ENTP',
-    'ESTJ',
-    'ESFJ',
-    'ENFJ',
-    'ENTJ',
-  ];
-
-  if (!validTypes.includes(mbti?.toUpperCase())) {
-    return {
-      valid: false,
-      error: 'Invalid MBTI type',
-    };
-  }
-
-  return { valid: true };
-};
-
 // Validate required fields
 export const validateRequired = (value, fieldName = 'Field') => {
   if (!value || (typeof value === 'string' && !value.trim())) {
@@ -315,7 +284,6 @@ export default {
   validateFileType,
   validateEmail,
   validatePassword,
-  validateMBTI,
   validateRequired,
   validateNumberRange,
   validateURL,

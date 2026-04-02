@@ -16,7 +16,7 @@ spring:
         format_sql: true
 
 server:
-  port: 8084
+  port: 8085
   servlet:
     context-path: /llm-service
 
@@ -47,7 +47,5 @@ app:
     model: gpt-3.5-turbo
     timeout-seconds: 30
     max-tokens: 1000
-  mbti:
-    enabled: true
   troubleshooting:
     enabled: true

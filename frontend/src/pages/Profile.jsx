@@ -1,27 +1,21 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { toast } from 'react-toastify';
-import api from '../services/api';
+import { authService } from '../services/auth';
 
 const Profile = ({ user, onUserUpdate }) => {
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: user.name || '',
     email: user.email || '',
-    mbti: user.mbti || 'ISTJ',
   });
   const [mfaEnabled, setMfaEnabled] = useState(user.mfa_enabled || false);
   const [showMFASetup, setShowMFASetup] = useState(false);
+  const [showDisableMFAModal, setShowDisableMFAModal] = useState(false);
   const [mfaSecret, setMfaSecret] = useState(null);
   const [mfaCode, setMfaCode] = useState('');
+  const [disableMfaCode, setDisableMfaCode] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const mbtiTypes = [
-    'ISTJ', 'ISFJ', 'INFJ', 'INTJ',
-    'ISTP', 'ISFP', 'INFP', 'INTP',
-    'ESTP', 'ESFP', 'ENFP', 'ENTP',
-    'ESTJ', 'ESFJ', 'ENFJ', 'ENTJ',
-  ];
 
   const handleChange = (e) => {
     setFormData({
@@ -35,8 +29,8 @@ const Profile = ({ user, onUserUpdate }) => {
     setLoading(true);
 
     try {
-      const response = await api.put('/users/profile', formData);
-      onUserUpdate(response.data.user);
+      const updatedUser = await authService.updateCurrentUser(formData);
+      onUserUpdate(updatedUser);
       setEditing(false);
       toast.success('Profile updated successfully!');
     } catch (error) {
@@ -49,8 +43,8 @@ const Profile = ({ user, onUserUpdate }) => {
 
   const handleEnableMFA = async () => {
     try {
-      const response = await api.post('/auth/mfa/setup');
-      setMfaSecret(response.data);
+      const response = await authService.setupMFA();
+      setMfaSecret(response);
       setShowMFASetup(true);
     } catch (error) {
       console.error('MFA setup error:', error);
@@ -63,10 +57,7 @@ const Profile = ({ user, onUserUpdate }) => {
     setLoading(true);
 
     try {
-      await api.post('/auth/mfa/verify', {
-        code: mfaCode,
-        secret: mfaSecret.secret,
-      });
+      await authService.verifyMFA(mfaCode, mfaSecret.secret);
 
       setMfaEnabled(true);
       setShowMFASetup(false);
@@ -81,17 +72,26 @@ const Profile = ({ user, onUserUpdate }) => {
     }
   };
 
-  const handleDisableMFA = async () => {
-    if (!window.confirm('Are you sure you want to disable MFA?')) return;
+  const handleDisableMFA = async (e) => {
+    e.preventDefault();
+    if (disableMfaCode.length !== 6) {
+      toast.error('Enter your current 6-digit MFA code');
+      return;
+    }
 
+    setLoading(true);
     try {
-      await api.post('/auth/mfa/disable');
+      await authService.disableMFA(disableMfaCode);
       setMfaEnabled(false);
+      setShowDisableMFAModal(false);
+      setDisableMfaCode('');
       toast.success('MFA disabled successfully!');
       onUserUpdate({ ...user, mfa_enabled: false });
     } catch (error) {
       console.error('MFA disable error:', error);
       toast.error('Failed to disable MFA');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -114,11 +114,6 @@ const Profile = ({ user, onUserUpdate }) => {
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900">{user.name}</h2>
                 <p className="text-gray-600">{user.email}</p>
-                <div className="mt-4">
-                  <span className="inline-block px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm font-medium">
-                    {user.mbti || 'ISTJ'}
-                  </span>
-                </div>
               </div>
             </div>
           </div>
@@ -142,10 +137,11 @@ const Profile = ({ user, onUserUpdate }) => {
               {editing ? (
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="profile-name" className="block text-sm font-medium text-gray-700 mb-2">
                       Full Name
                     </label>
                     <input
+                      id="profile-name"
                       type="text"
                       name="name"
                       value={formData.name}
@@ -155,34 +151,17 @@ const Profile = ({ user, onUserUpdate }) => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="profile-email" className="block text-sm font-medium text-gray-700 mb-2">
                       Email Address
                     </label>
                     <input
+                      id="profile-email"
                       type="email"
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      MBTI Personality Type
-                    </label>
-                    <select
-                      name="mbti"
-                      value={formData.mbti}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      {mbtiTypes.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
                   </div>
 
                   <div className="flex space-x-3 pt-4">
@@ -200,7 +179,6 @@ const Profile = ({ user, onUserUpdate }) => {
                         setFormData({
                           name: user.name || '',
                           email: user.email || '',
-                          mbti: user.mbti || 'ISTJ',
                         });
                       }}
                       className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
@@ -222,12 +200,6 @@ const Profile = ({ user, onUserUpdate }) => {
                       Email Address
                     </label>
                     <p className="text-gray-900">{user.email}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">
-                      MBTI Personality Type
-                    </label>
-                    <p className="text-gray-900">{user.mbti || 'ISTJ'}</p>
                   </div>
                 </div>
               )}
@@ -266,7 +238,8 @@ const Profile = ({ user, onUserUpdate }) => {
                   </button>
                 ) : (
                   <button
-                    onClick={handleDisableMFA}
+                    type="button"
+                    onClick={() => setShowDisableMFAModal(true)}
                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                   >
                     Disable MFA
@@ -277,7 +250,7 @@ const Profile = ({ user, onUserUpdate }) => {
               {/* Password Change */}
               <div>
                 <h4 className="font-medium text-gray-900 mb-4">Change Password</h4>
-                <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                <button type="button" className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
                   Update Password
                 </button>
               </div>
@@ -357,6 +330,66 @@ const Profile = ({ user, onUserUpdate }) => {
                   className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-gray-400 transition-colors"
                 >
                   {loading ? 'Verifying...' : 'Verify'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showDisableMFAModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="disable-mfa-title"
+            aria-describedby="disable-mfa-description"
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+          >
+            <h3 id="disable-mfa-title" className="text-xl font-semibold text-gray-900 mb-3">
+              Disable Two-Factor Authentication
+            </h3>
+            <p id="disable-mfa-description" className="text-sm text-gray-600 mb-4">
+              Enter your current 6-digit MFA code to confirm this change.
+            </p>
+
+            <form onSubmit={handleDisableMFA}>
+              <div className="mb-4">
+                <label htmlFor="disable-mfa-code" className="block text-sm font-medium text-gray-700 mb-2">
+                  Current MFA Code
+                </label>
+                <input
+                  id="disable-mfa-code"
+                  type="text"
+                  value={disableMfaCode}
+                  onChange={(e) => setDisableMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  maxLength="6"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="000000"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-center text-2xl tracking-widest focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDisableMFAModal(false);
+                    setDisableMfaCode('');
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || disableMfaCode.length !== 6}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 transition-colors"
+                >
+                  {loading ? 'Disabling...' : 'Disable MFA'}
                 </button>
               </div>
             </form>

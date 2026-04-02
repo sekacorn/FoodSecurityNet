@@ -39,7 +39,6 @@ class TestCompleteUserWorkflow:
         data = response.json()
         assert "accessToken" in data, "Access token not returned"
         assert "refreshToken" in data, "Refresh token not returned"
-        assert data.get("mbtiType") == "INTJ", "MBTI type not preserved"
         print(f"✓ User logged in successfully")
         print(f"  Access Token: {data['accessToken'][:20]}...")
 
@@ -55,7 +54,6 @@ class TestCompleteUserWorkflow:
         data = response.json()
         assert "username" in data, "Username not returned"
         assert "email" in data, "Email not returned"
-        assert data.get("mbtiType") == "INTJ", "MBTI type mismatch"
         print(f"✓ Current user retrieved: {data['username']}")
 
     def test_04_upload_agricultural_data(self, base_url, auth_headers, sample_agricultural_data):
@@ -114,8 +112,7 @@ class TestCompleteUserWorkflow:
             },
             "visualizationConfig": {
                 "colorScheme": "viridis",
-                "showLegend": True,
-                "mbtiStyle": "INTJ"
+                "showLegend": True
             }
         }
 
@@ -165,7 +162,6 @@ class TestCompleteUserWorkflow:
         data = response.json()
         assert "response" in data, "Response not returned"
         assert len(data["response"]) > 0, "Empty response"
-        assert "mbti_type" in data, "MBTI type not in response"
 
         print(f"✓ LLM query successful")
         print(f"  Query: {sample_llm_query['query']}")
@@ -274,37 +270,6 @@ class TestDataValidation:
 
         assert response.status_code in [400, 422], "Should reject invalid prediction data"
         print(f"✓ Invalid prediction data rejected correctly")
-
-
-class TestMBTIPersonalization:
-    """Test MBTI personalization features"""
-
-    @pytest.mark.parametrize("mbti_type", [
-        "INTJ", "INTP", "ENTJ", "ENTP",  # Analysts
-        "INFJ", "INFP", "ENFJ", "ENFP",  # Diplomats
-        "ISTJ", "ISFJ", "ESTJ", "ESFJ",  # Sentinels
-        "ISTP", "ISFP", "ESTP", "ESFP"   # Explorers
-    ])
-    def test_mbti_llm_personalization(self, llm_service_url, mbti_type):
-        """Test LLM responses are personalized for each MBTI type"""
-        query_data = {
-            "query": "How can I improve my farm productivity?",
-            "mbti_type": mbti_type
-        }
-
-        response = requests.post(
-            f"{llm_service_url}/api/query",
-            json=query_data,
-            timeout=30
-        )
-
-        if response.status_code == 200:
-            data = response.json()
-            assert data.get("mbti_type") == mbti_type, "MBTI type not preserved"
-            assert len(data.get("response", "")) > 0, "Empty response"
-            print(f"✓ {mbti_type} personalization working")
-        else:
-            print(f"⚠ {mbti_type} personalization test skipped (service unavailable)")
 
 
 class TestSystemHealth:

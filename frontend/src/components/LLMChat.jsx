@@ -39,15 +39,18 @@ const LLMChat = ({ context = null, user }) => {
     setLoading(true);
 
     try {
-      const response = await api.post('/llm/chat', {
-        message: userMessage.content,
-        context: context,
-        history: messages.slice(-5), // Last 5 messages for context
+      const response = await api.post('/llm/query', {
+        query: userMessage.content,
+        userId: user?.id || 'anonymous',
+        context: {
+          ...(context || {}),
+          history: messages.slice(-5),
+        },
       });
 
       const assistantMessage = {
         role: 'assistant',
-        content: response.data.response || response.data.message,
+        content: response.data?.response?.response || response.data?.response || 'No response received.',
         timestamp: new Date(),
       };
 

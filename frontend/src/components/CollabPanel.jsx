@@ -1,65 +1,116 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { toast } from 'react-toastify';
+import api from '../services/api';
 import { websocketService } from '../services/websocket';
 
 const CollabPanel = ({ sessionId, user }) => {
   const [users, setUsers] = useState([]);
+  const [userNames, setUserNames] = useState({});
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
-  const [cursor, setCursor] = useState({ x: 0, y: 0 });
   const [remoteCursors, setRemoteCursors] = useState({});
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     if (!sessionId) return;
 
-    // Connect to WebSocket
-    websocketService.connect();
+    const bootstrapSession = async () => {
+      try {
+        const [usersResponse, historyResponse] = await Promise.all([
+          api.get(`/collaboration/sessions/${sessionId}/users`),
+          api.get(`/collaboration/sessions/${sessionId}/history`),
+        ]);
 
-    // Join session
-    websocketService.joinSession(sessionId, user);
+        const activeUsers = usersResponse.data?.users || [];
+        setUsers(activeUsers);
+        setUserNames((prev) => ({
+          ...prev,
+          [user.id]: user.name,
+        }));
 
-    // Set up event listeners
-    websocketService.on('connected', () => {
+        const historicalMessages = (historyResponse.data?.history || [])
+          .filter((entry) => entry.actionType === 'CHAT_MESSAGE')
+          .map((entry) => ({
+            userId: entry.userId,
+            userName: entry.actionData?.userName || entry.userId,
+            content: entry.actionData?.content || '',
+            timestamp: entry.actionData?.timestamp || entry.createdAt,
+          }));
+
+        setMessages(historicalMessages);
+
+        await websocketService.joinSession(sessionId, user);
+      } catch (error) {
+        console.error('Failed to bootstrap collaboration session:', error);
+        toast.error('Failed to connect to collaboration session');
+      }
+    };
+
+    const handleConnected = () => {
       setIsConnected(true);
       toast.success('Connected to collaboration session');
-    });
+    };
 
-    websocketService.on('disconnected', () => {
+    const handleDisconnected = () => {
       setIsConnected(false);
       toast.info('Disconnected from collaboration session');
-    });
+    };
 
-    websocketService.on('user-joined', (data) => {
-      setUsers(data.users);
-      toast.info(`${data.user.name} joined the session`);
-    });
+    const handleUserJoined = (data) => {
+      setUsers((prev) => Array.from(new Set([...prev, data.userId])));
+      setUserNames((prev) => ({
+        ...prev,
+        [data.userId]: data.userName || data.userId,
+      }));
+      toast.info(`${data.userName || data.userId} joined the session`);
+    };
 
-    websocketService.on('user-left', (data) => {
-      setUsers(data.users);
-      toast.info(`${data.user.name} left the session`);
-    });
+    const handleUserLeft = (data) => {
+      setUsers((prev) => prev.filter((id) => id !== data.userId));
+      toast.info(`${data.userId} left the session`);
+    };
 
-    websocketService.on('message', (message) => {
+    const handleMessage = (message) => {
       setMessages((prev) => [...prev, message]);
-    });
+    };
 
-    websocketService.on('cursor-move', (data) => {
+    const handleCursorMove = (data) => {
       setRemoteCursors((prev) => ({
         ...prev,
         [data.userId]: { x: data.x, y: data.y, name: data.userName },
       }));
-    });
+      setUserNames((prev) => ({
+        ...prev,
+        [data.userId]: data.userName || data.userId,
+      }));
+    };
 
-    websocketService.on('error', (error) => {
+    const handleError = (error) => {
       console.error('WebSocket error:', error);
       toast.error('Collaboration error occurred');
-    });
+    };
+
+    websocketService.on('connected', handleConnected);
+    websocketService.on('disconnected', handleDisconnected);
+    websocketService.on('user-joined', handleUserJoined);
+    websocketService.on('user-left', handleUserLeft);
+    websocketService.on('message', handleMessage);
+    websocketService.on('cursor-move', handleCursorMove);
+    websocketService.on('error', handleError);
+
+    bootstrapSession();
 
     return () => {
-      websocketService.leaveSession(sessionId);
+      websocketService.off('connected', handleConnected);
+      websocketService.off('disconnected', handleDisconnected);
+      websocketService.off('user-joined', handleUserJoined);
+      websocketService.off('user-left', handleUserLeft);
+      websocketService.off('message', handleMessage);
+      websocketService.off('cursor-move', handleCursorMove);
+      websocketService.off('error', handleError);
+      websocketService.leaveSession(sessionId, user);
       websocketService.disconnect();
     };
   }, [sessionId, user]);
@@ -86,7 +137,6 @@ const CollabPanel = ({ sessionId, user }) => {
   const handleMouseMove = (e) => {
     const x = e.clientX;
     const y = e.clientY;
-    setCursor({ x, y });
 
     if (isConnected) {
       websocketService.sendCursorPosition(sessionId, {
@@ -98,9 +148,9 @@ const CollabPanel = ({ sessionId, user }) => {
     }
   };
 
-  const getRandomColor = (userId) => {
+  const getRandomColor = (userId = '0') => {
     const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
-    const index = userId.charCodeAt(0) % colors.length;
+    const index = String(userId).charCodeAt(0) % colors.length;
     return colors[index];
   };
 
@@ -131,21 +181,21 @@ const CollabPanel = ({ sessionId, user }) => {
             Active Users ({users.length})
           </h4>
           <div className="space-y-2">
-            {users.map((u) => (
+            {users.map((userId) => (
               <div
-                key={u.id}
+                key={userId}
                 className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50"
               >
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm"
-                  style={{ backgroundColor: getRandomColor(u.id) }}
+                  style={{ backgroundColor: getRandomColor(userId) }}
                 >
-                  {u.name.charAt(0).toUpperCase()}
+                  {(userNames[userId] || userId).charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{u.name}</p>
+                  <p className="font-medium text-gray-900 truncate">{userNames[userId] || userId}</p>
                   <p className="text-xs text-gray-500">
-                    {u.id === user.id ? '(You)' : 'Collaborator'}
+                    {userId === user.id ? '(You)' : 'Collaborator'}
                   </p>
                 </div>
               </div>

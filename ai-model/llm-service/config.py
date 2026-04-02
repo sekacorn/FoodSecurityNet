@@ -24,13 +24,5 @@ TEMPERATURE = config('TEMPERATURE', default=0.7, cast=float)
 MODEL_CACHE_DIR = config('MODEL_CACHE_DIR', default='./model_cache')
 os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
 
-# MBTI Configuration
-MBTI_TYPES = [
-    'ENTJ', 'INTJ', 'ENTP', 'INTP',
-    'ENFJ', 'INFJ', 'ENFP', 'INFP',
-    'ESTJ', 'ISTJ', 'ESFJ', 'ISFJ',
-    'ESTP', 'ISTP', 'ESFP', 'ISFP'
-]
-
 # Logging
 LOG_LEVEL = config('LOG_LEVEL', default='INFO')

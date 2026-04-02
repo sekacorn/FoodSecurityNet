@@ -74,6 +74,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     boolean existsByEmail(String email);
 
+    boolean existsByEmailAndIdNot(String email, UUID id);
+
     /**
      * Checks if a user exists with the given SSO provider and subject
      *

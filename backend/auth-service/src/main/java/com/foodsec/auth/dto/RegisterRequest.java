@@ -2,7 +2,6 @@ package com.foodsec.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,10 +40,6 @@ public class RegisterRequest {
     @NotBlank(message = "Full name is required")
     @Size(max = 100, message = "Full name must not exceed 100 characters")
     private String fullName;
-
-    @Size(min = 4, max = 4, message = "MBTI type must be exactly 4 characters")
-    @Pattern(regexp = "^[IE][NS][TF][JP]$", message = "Invalid MBTI type format")
-    private String mbtiType;
 
     @Pattern(regexp = "^(USER|MODERATOR|ADMIN|ENTERPRISE)$", message = "Invalid role")
     private String role;

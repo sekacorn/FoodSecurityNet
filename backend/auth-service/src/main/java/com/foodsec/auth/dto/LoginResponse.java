@@ -67,11 +67,6 @@ public class LoginResponse {
     private Role role;
 
     /**
-     * MBTI personality type
-     */
-    private String mbtiType;
-
-    /**
      * Whether MFA is enabled for this user
      */
     private boolean mfaEnabled;

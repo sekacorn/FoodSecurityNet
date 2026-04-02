@@ -3,7 +3,6 @@ package com.foodsecuritynet.llm.controller;
 import com.foodsecuritynet.llm.model.LlmResponse;
 import com.foodsecuritynet.llm.model.QueryContext;
 import com.foodsecuritynet.llm.service.LlmIntegrationService;
-import com.foodsecuritynet.llm.service.MbtiTailoringService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +21,6 @@ import java.util.Map;
 public class LlmQueryController {
 
     private final LlmIntegrationService llmIntegrationService;
-    private final MbtiTailoringService mbtiTailoringService;
 
     @PostMapping("/query")
     public Mono<ResponseEntity<Map<String, Object>>> query(@RequestBody @Valid Map<String, Object> request) {
@@ -31,13 +29,11 @@ public class LlmQueryController {
         try {
             String query = request.get("query").toString();
             String userId = request.getOrDefault("userId", "anonymous").toString();
-            String mbtiType = request.getOrDefault("mbtiType", "ISTJ").toString();
             Map<String, Object> context = (Map<String, Object>) request.getOrDefault("context", Map.of());
 
             QueryContext queryContext = QueryContext.builder()
                     .query(query)
                     .userId(userId)
-                    .mbtiType(mbtiType)
                     .context(context)
                     .build();
 
@@ -54,42 +50,6 @@ public class LlmQueryController {
 
         } catch (Exception e) {
             log.error("Error in query endpoint", e);
-            return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("error", "Invalid request: " + e.getMessage())));
-        }
-    }
-
-    @PostMapping("/tailored-query")
-    public Mono<ResponseEntity<Map<String, Object>>> tailoredQuery(@RequestBody @Valid Map<String, Object> request) {
-        log.info("Received tailored LLM query request");
-
-        try {
-            String query = request.get("query").toString();
-            String userId = request.get("userId").toString();
-            String mbtiType = request.get("mbtiType").toString();
-            Map<String, Object> context = (Map<String, Object>) request.getOrDefault("context", Map.of());
-
-            QueryContext queryContext = QueryContext.builder()
-                    .query(query)
-                    .userId(userId)
-                    .mbtiType(mbtiType)
-                    .context(context)
-                    .build();
-
-            return mbtiTailoringService.processWithMbtiTailoring(queryContext)
-                    .map(response -> ResponseEntity.ok(Map.of(
-                            "status", "success",
-                            "response", response,
-                            "mbtiType", mbtiType
-                    )))
-                    .onErrorResume(e -> {
-                        log.error("Error processing tailored query", e);
-                        return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                .body(Map.of("error", "Failed to process query: " + e.getMessage())));
-                    });
-
-        } catch (Exception e) {
-            log.error("Error in tailored query endpoint", e);
             return Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "Invalid request: " + e.getMessage())));
         }
