@@ -78,4 +78,4 @@ backend/api-gateway/
 
 ## License
 
-Apache License 2.0. See the repository [LICENSE](../../LICENSE).
+MIT License. See the repository [LICENSE](../../LICENSE).

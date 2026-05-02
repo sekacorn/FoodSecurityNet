@@ -60,4 +60,4 @@ Default dev URL: [http://127.0.0.1:3000](http://127.0.0.1:3000)
 
 ## License
 
-Apache License 2.0. See [`../LICENSE`](/Users/sekac/Documents/My-Projects-LOCAL/FoodSecurityNet/LICENSE).
+MIT License. See [`../LICENSE`](/Users/sekac/Documents/My-Projects-LOCAL/FoodSecurityNet/LICENSE).

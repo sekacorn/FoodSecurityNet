@@ -2,6 +2,7 @@
   "name": "foodsecuritynet-frontend",
   "version": "1.0.0",
   "description": "FoodSecurityNet React Frontend",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
